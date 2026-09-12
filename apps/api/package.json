@@ -11,6 +11,8 @@
   "dependencies": {
     "@hono/node-server": "^1.19.0",
     "@hop/shared": "*",
+    "@x402/hedera": "^2.2.0",
+    "dotenv": "^16.6.0",
     "hono": "^4.9.0"
   },
   "devDependencies": {

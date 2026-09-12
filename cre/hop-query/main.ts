@@ -2,65 +2,148 @@ import {
   CronCapability,
   HTTPClient,
   handlerInTee,
+  ok,
   Runner,
+  text,
   type TeeRuntime,
 } from "@chainlink/cre-sdk";
+import {
+  fetchProtocolSnapshotSync,
+  joinAndAggregate,
+  parsePolicyTable,
+  type GraphHttp,
+  type QueryRequest,
+  type QueryType,
+} from "../../packages/shared/src/index.ts";
 
 type GraphCfg = {
-  protocol_a_url: string;
-  protocol_b_url: string;
-  schemaVersion: string;
+  slug: string;
+  url: string;
+  id: string;
 };
 
 type Config = {
   schedule: string;
-  query: string;
+  query: QueryType;
   protocols: string[];
   max_block_lag: number;
-  graph: GraphCfg;
+  window?: { from: string; to: string };
+  chain_rpc_url: string;
+  graph: {
+    schemaVersion: string;
+    graph_auth_header?: string;
+    protocols: GraphCfg[];
+  };
 };
 
-type PolicyTable = {
-  version: string;
-  caps: unknown[];
-};
+function creHttp(runtime: TeeRuntime<Config>): GraphHttp {
+  const client = new HTTPClient();
+  return {
+    postJson(url, body, headers = {}) {
+      const encoded = Buffer.from(JSON.stringify(body)).toString("base64");
+      const multiHeaders: Record<string, { values: string[] }> = {
+        "Content-Type": { values: ["application/json"] },
+      };
+      for (const [key, value] of Object.entries(headers)) {
+        multiHeaders[key] = { values: [value] };
+      }
+      const response = client
+        .sendRequest(runtime, {
+          url,
+          method: "POST",
+          timeout: "20s",
+          body: encoded,
+          multiHeaders,
+        })
+        .result();
+      if (!ok(response)) {
+        throw new Error(`http_${response.statusCode}`);
+      }
+      return { status: response.statusCode, text: text(response) };
+    },
+  };
+}
 
-function loadPolicyTable(runtime: TeeRuntime<Config>): PolicyTable | null {
-  const secret = runtime.getSecret({ id: "POLICY_TABLE" }).result();
-  const raw = secret.value?.trim() ?? "";
-  if (!raw || raw === "{}") return null;
-  const table = JSON.parse(raw) as PolicyTable;
-  if (!table.version || !Array.isArray(table.caps) || table.caps.length === 0) {
-    return null;
+function chainHeadSync(http: GraphHttp, rpc: string): number | undefined {
+  if (!rpc) return undefined;
+  const res = http.postJson(rpc, {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "eth_blockNumber",
+    params: [],
+  });
+  if (typeof (res as Promise<unknown>).then === "function") return undefined;
+  const parsed = JSON.parse((res as { text: string }).text) as { result?: string };
+  if (!parsed.result) return undefined;
+  return Number.parseInt(parsed.result, 16);
+}
+
+function authHeaders(config: Config, runtime: TeeRuntime<Config>): Record<string, string> {
+  const headers: Record<string, string> = {};
+  let token = config.graph.graph_auth_header?.trim() ?? "";
+  if (!token) {
+    try {
+      const graph = runtime.getSecret({ id: "GRAPH_API_KEY" }).result();
+      token = graph.value?.trim() ?? "";
+    } catch {
+      token = "";
+    }
   }
-  return table;
-}
-
-function fetchLiveGraph(_runtime: TeeRuntime<Config>, _http: HTTPClient): never {
-  // Live Studio / Graph Market URL only. No fixture file. Two Messari 3.1.0 protocols.
-  throw new Error("not_implemented: fetchLiveGraph");
-}
-
-function joinAndAggregate(_policy: PolicyTable, _snapshot: unknown): never {
-  // Aggregates + hashes only. Never Account.id / wallet rows. Never return cap values.
-  throw new Error("not_implemented: joinAndAggregate");
+  if (token) {
+    headers.Authorization = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+  }
+  return headers;
 }
 
 const onQuery = (runtime: TeeRuntime<Config>): string => {
-  const policy = loadPolicyTable(runtime);
+  let policyRaw = "";
+  try {
+    policyRaw = runtime.getSecret({ id: "POLICY_TABLE" }).result().value ?? "";
+  } catch {
+    policyRaw = "";
+  }
+  const policy = parsePolicyTable(policyRaw);
   if (!policy) {
     return JSON.stringify({ error: "policy_unavailable" });
   }
 
-  // Join is the next increment. Do not log the table (leaves the sim boundary).
-  const http = new HTTPClient();
+  const request: QueryRequest = {
+    query: runtime.config.query,
+    protocols: runtime.config.protocols,
+    max_block_lag: runtime.config.max_block_lag,
+    window: runtime.config.window,
+  };
+
+  const http = creHttp(runtime);
+  const headers = authHeaders(runtime.config, runtime);
+  const protocols = runtime.config.graph.protocols.filter((p) => p.url);
+  if (protocols.length < 1) {
+    return JSON.stringify({ error: "graph_unconfigured" });
+  }
+
   try {
-    const snapshot = fetchLiveGraph(runtime, http);
-    const out = joinAndAggregate(policy, snapshot);
-    return JSON.stringify(out);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "error";
-    return JSON.stringify({ error: "not_implemented", detail: msg });
+    const head = chainHeadSync(http, runtime.config.chain_rpc_url);
+    const snapshot = {
+      chainHead: head,
+      protocols: protocols.map((p) =>
+        fetchProtocolSnapshotSync(http, {
+          slug: p.slug,
+          url: p.url,
+          deploymentId: p.id,
+          authHeaders: headers,
+          request,
+          chainHead: head,
+        }),
+      ),
+    };
+    const joined = joinAndAggregate(policy, snapshot, request);
+    return JSON.stringify({
+      cre: { mode: "simulation", artifact: "handlerInTee" },
+      ...joined,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "join_error";
+    return JSON.stringify({ error: "join_failed", detail: msg });
   }
 };
 
@@ -73,3 +156,5 @@ export async function main() {
   const runner = await Runner.newRunner<Config>();
   await runner.run(initWorkflow);
 }
+
+await main();

@@ -8,7 +8,7 @@ Partners (three): Chainlink CRE `handlerInTee` · Hedera Blocky402 (HBAR `0.0.0`
 
 Pitch: audit-ready evidence for agent tool use. Not “compliant AI.”
 
-**Init only.** Routes return `501 not_implemented`. Paid 402 path, live Graph join, and CRE sim wiring are next.
+Paid path: `POST /v1/query` → 402 → Blocky402 verify/settle → CRE join (inline engine or `HOP_JOIN=cre`) → evidence. `GET /v1/evidence/{id}` is public hashes.
 
 ## Architecture
 
@@ -70,7 +70,8 @@ const signed = await scheme.createPaymentPayload(2, requirements);
 
 Do not proxy Graph’s Base USDC x402. That is not the Hedera prize.
 
-Charge table: unpaid/bad payload = no charge. Missing policy = 503, no charge. `stale` and `k_anon_denied` = HTTP 200, **charged**. No invented refunds.
+- Unpaid/bad payload = no charge. Missing policy = 503, no charge. `stale` and `k_anon_denied` = HTTP 200, **charged**. No invented refunds.
+- Workbench may call `POST /v1/demo/sign` when `HOP_DEMO_SIGN=1` (demo payer keys in `.env`). That still produces a real Blocky402 payload. Agents should send `X-PAYMENT` themselves.
 
 ## Graph
 

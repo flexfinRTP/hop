@@ -168,7 +168,7 @@ components:
       properties:
         error:
           type: string
-          enum: [policy_unavailable, not_implemented]
+          enum: [policy_unavailable, not_implemented, bad_payment, idempotency_required, payer_denied, rate_limited, not_found]
     Evidence:
       type: object
       required:
