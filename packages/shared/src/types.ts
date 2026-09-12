@@ -38,15 +38,53 @@ export type Evidence = {
   k_anon: { result: "pass" | "fail" | "not_applicable" };
   aggregate_hash: string;
   settlement: { ref: string };
-  cre: { mode: "simulation" | "don"; artifact?: string };
+  cre: {
+    mode: "simulation" | "don";
+    artifact?: string;
+    tee?: string;
+    trigger?: "http";
+    report_hash?: string;
+    execution_id?: string;
+  };
+  world?: { nullifier_hash: string };
   status: QueryStatus;
   hcs_seq?: number;
+  mandate?: {
+    id: string;
+    hash: string;
+    remaining_tinybars: number;
+    remaining_hops: number;
+    decision: "ALLOW" | "DENY" | "REVIEW";
+  };
+  chain?: { prev: string; hash: string };
+  meter?: { amount: string; protocols: number; util?: number };
+  peac_hash?: string;
+  reason?: HopReason;
+  posture?: HopPosture;
+};
+
+export type HopReason = {
+  stamp: string;
+  metric_hash?: string;
+  observed?: number;
+  freshness: "live" | "stale";
+};
+
+export type HopPosture = {
+  custody: "non_custodial";
+  ofac: "not_screened";
+  mor: "testnet_payee";
+  cre: "simulation" | "don";
+  ats: "simulated";
+  world?: "off" | "unique_human";
 };
 
 export type QueryResponse = {
   status: QueryStatus;
   aggregate?: Record<string, unknown>;
   evidence: Evidence;
+  reason?: HopReason;
+  mandate?: Evidence["mandate"];
   trace?: TraceEvent[];
 };
 
@@ -65,7 +103,7 @@ export type PaymentRequiredBody = {
   accepts: PaymentRequirements[];
 };
 
-export type TraceRail = "graph" | "hedera" | "cre" | "hop";
+export type TraceRail = "graph" | "hedera" | "cre" | "hop" | "world";
 
 export type TraceEvent = {
   t: string;
@@ -176,11 +214,27 @@ export const CHARGE = {
 } as const;
 
 export const LABELS = {
-  cre: "CRE: simulation",
+  cre: "CRE: handlerInTee",
   rails: "data: Graph (EVM) · pay: Hedera",
+  world: "World ID unique human",
   ats: "simulated treasury token on Hedera testnet; no claim on T-bills, no investment rights, no promised yield",
   demoGraph: "demo: Graph lending",
+  mandate: "mandate · LLM never pays",
+  peac: "PEAC-shaped receipt",
+  hcs: "HCS hash anchor",
+  custody: "non-custodial",
+  ofac: "OFAC: not screened",
+  mor: "testnet payee",
 } as const;
+
+export const POSTURE: HopPosture = {
+  custody: "non_custodial",
+  ofac: "not_screened",
+  mor: "testnet_payee",
+  cre: "simulation",
+  ats: "simulated",
+  world: "off",
+};
 
 export const K_ANON = 5;
 export const MESSARI_SCHEMA = "3.1.0";
@@ -206,7 +260,32 @@ export const PINNED_DEPLOYMENTS = {
 } as const;
 
 export const INDUSTRY_CHIPS = [
-  { id: "risk", label: "Risk desk", ask: "Are both books over our limit?" },
-  { id: "insurance", label: "Insurance", ask: "Did incidents this window go over our limit?" },
-  { id: "trade", label: "Trade", ask: "Does this reading clear our cutoff?" },
+  {
+    id: "risk",
+    label: "Risk desk",
+    ask: "Are both books over our limit?",
+    over: "over",
+    clear: "not over",
+  },
+  {
+    id: "insurance",
+    label: "Insurance",
+    ask: "Did incidents this window go over our limit?",
+    over: "over",
+    clear: "not over",
+  },
+  {
+    id: "trade",
+    label: "Trade",
+    ask: "Does this reading clear our cutoff?",
+    over: "hold",
+    clear: "release",
+  },
+  {
+    id: "tvl",
+    label: "TVL",
+    ask: "Is combined TVL under our floor?",
+    over: "over",
+    clear: "not over",
+  },
 ] as const;

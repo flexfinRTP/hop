@@ -1,13 +1,15 @@
 import {
   LIQUIDATES_QUERY,
+  MARKETS_QUERY,
   POSITIONS_QUERY,
   POSITIONS_QUERY_CLOSED_ZERO,
-  SNAPSHOT_QUERY,
+  PROTOCOL_QUERY,
 } from "./graphql.js";
 import type {
   GraphLiquidate,
   GraphMarket,
   GraphPosition,
+  PolicyTable,
   ProtocolSnapshot,
   QueryRequest,
 } from "./types.js";
@@ -44,16 +46,34 @@ type SnapshotData = {
 };
 
 function parseEnvelope<T>(status: number, raw: string): T {
-  if (status < 200 || status >= 300) throw new Error(`graph_http_${status}`);
+  if (status < 200 || status >= 300) {
+    throw new Error(`graph_http_${status}:${raw.slice(0, 120)}`);
+  }
   let parsed: GraphEnvelope<T>;
   try {
     parsed = JSON.parse(raw) as GraphEnvelope<T>;
   } catch {
     throw new Error("graph_json");
   }
-  if (parsed.errors?.length) throw new Error(parsed.errors[0]?.message ?? "graph_error");
-  if (!parsed.data) throw new Error("graph_empty");
+  if (!parsed.data) {
+    throw new Error(parsed.errors?.[0]?.message ?? "graph_empty");
+  }
   return parsed.data;
+}
+
+export function snapshotNeeds(
+  request: QueryRequest,
+  policy?: PolicyTable | null,
+): { markets: boolean; positions: boolean; liquidates: boolean } {
+  const q = request.query;
+  const liqCap = Boolean(
+    policy?.caps.some((c) => c.metric === "liquidations_count" || c.metric === "liquidations_usd"),
+  );
+  return {
+    markets: q === "market_params",
+    positions: q === "position_counts" || q === "account_ltv",
+    liquidates: q === "liquidations" || (q === "policy_check" && liqCap),
+  };
 }
 
 function syncBody(
@@ -101,14 +121,6 @@ function windowUnix(request: QueryRequest): { from: number; to: number } {
     ? Math.floor(new Date(request.window.to).getTime() / 1000)
     : now;
   return { from, to };
-}
-
-function needPositions(query: QueryRequest["query"]): boolean {
-  return query === "position_counts" || query === "account_ltv" || query === "policy_check";
-}
-
-function needLiq(query: QueryRequest["query"]): boolean {
-  return query === "liquidations" || query === "policy_check";
 }
 
 function toSnapshot(
@@ -193,7 +205,7 @@ function liquidatesSync(
   to: number,
 ): GraphLiquidate[] {
   const out: GraphLiquidate[] = [];
-  for (let skip = 0; skip < 10000; skip += 1000) {
+  for (let skip = 0; skip < 400; skip += 200) {
     const rows = graphqlSync<{ liquidates?: GraphLiquidate[] }>(
       http,
       url,
@@ -216,7 +228,7 @@ async function liquidatesAsync(
   to: number,
 ): Promise<GraphLiquidate[]> {
   const out: GraphLiquidate[] = [];
-  for (let skip = 0; skip < 10000; skip += 1000) {
+  for (let skip = 0; skip < 400; skip += 200) {
     const rows = await graphqlAsync<{ liquidates?: GraphLiquidate[] }>(
       http,
       url,
@@ -238,26 +250,59 @@ type FetchArgs = {
   authHeaders: Record<string, string>;
   request: QueryRequest;
   chainHead?: number;
+  policy?: PolicyTable | null;
 };
 
+function marketsSync(http: GraphHttp, url: string, headers: Record<string, string>): GraphMarket[] {
+  const out: GraphMarket[] = [];
+  for (let skip = 0; skip < 1000; skip += 200) {
+    const rows = graphqlSync<{ markets?: GraphMarket[] }>(http, url, MARKETS_QUERY, { skip }, headers);
+    const batch = rows.markets ?? [];
+    out.push(...batch);
+    if (batch.length < 200) break;
+  }
+  return out;
+}
+
+async function marketsAsync(
+  http: GraphHttp,
+  url: string,
+  headers: Record<string, string>,
+): Promise<GraphMarket[]> {
+  const out: GraphMarket[] = [];
+  for (let skip = 0; skip < 1000; skip += 200) {
+    const rows = await graphqlAsync<{ markets?: GraphMarket[] }>(http, url, MARKETS_QUERY, { skip }, headers);
+    const batch = rows.markets ?? [];
+    out.push(...batch);
+    if (batch.length < 200) break;
+  }
+  return out;
+}
+
 export function fetchProtocolSnapshotSync(http: GraphHttp, args: FetchArgs): ProtocolSnapshot {
-  const data = graphqlSync<SnapshotData>(http, args.url, SNAPSHOT_QUERY, {}, args.authHeaders);
+  const needs = snapshotNeeds(args.request, args.policy);
+  const data = graphqlSync<SnapshotData>(http, args.url, PROTOCOL_QUERY, {}, args.authHeaders);
   const { from, to } = windowUnix(args.request);
-  return toSnapshot(
+  const snap = toSnapshot(
     args,
     data,
-    needPositions(args.request.query) ? positionsSync(http, args.url, args.authHeaders) : [],
-    needLiq(args.request.query) ? liquidatesSync(http, args.url, args.authHeaders, from, to) : [],
+    needs.positions ? positionsSync(http, args.url, args.authHeaders) : [],
+    needs.liquidates ? liquidatesSync(http, args.url, args.authHeaders, from, to) : [],
   );
+  if (needs.markets) snap.markets = marketsSync(http, args.url, args.authHeaders);
+  return snap;
 }
 
 export async function fetchProtocolSnapshot(http: GraphHttp, args: FetchArgs): Promise<ProtocolSnapshot> {
-  const data = await graphqlAsync<SnapshotData>(http, args.url, SNAPSHOT_QUERY, {}, args.authHeaders);
+  const needs = snapshotNeeds(args.request, args.policy);
+  const data = await graphqlAsync<SnapshotData>(http, args.url, PROTOCOL_QUERY, {}, args.authHeaders);
   const { from, to } = windowUnix(args.request);
-  return toSnapshot(
+  const snap = toSnapshot(
     args,
     data,
-    needPositions(args.request.query) ? await positionsAsync(http, args.url, args.authHeaders) : [],
-    needLiq(args.request.query) ? await liquidatesAsync(http, args.url, args.authHeaders, from, to) : [],
+    needs.positions ? await positionsAsync(http, args.url, args.authHeaders) : [],
+    needs.liquidates ? await liquidatesAsync(http, args.url, args.authHeaders, from, to) : [],
   );
+  if (needs.markets) snap.markets = await marketsAsync(http, args.url, args.authHeaders);
+  return snap;
 }

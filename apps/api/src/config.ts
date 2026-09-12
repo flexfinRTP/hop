@@ -2,7 +2,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   BLOCKY402_TESTNET,
+  DEFAULT_MANDATE_JSON,
   PINNED_DEPLOYMENTS,
+  priceTinybars,
   type PaymentRequirements,
   type QueryRequest,
 } from "@hop/shared";
@@ -25,12 +27,30 @@ export type AppConfig = {
   rateLimitPerMin: number;
   hopJoin: "inline" | "cre";
   creCwd: string;
+  creEthPrivateKey: string;
+  creWorkflowId: string;
+  creGatewayUrl: string;
   demoSign: boolean;
   demoAccountId: string;
   demoPrivateKey: string;
   hcsTopic: string;
+  hcsAuto: boolean;
   hederaOperatorId: string;
   hederaOperatorKey: string;
+  corsOrigin: string;
+  wallBuffer: number;
+  evidenceDir: string;
+  evidenceTtlMs: number;
+  mandateJson: string;
+  mandateRequired: boolean;
+  meterPerProtocol: string;
+  meterUtilScale: string;
+  worldAppId: string;
+  worldRpId: string;
+  worldRpSigningKey: string;
+  worldAction: string;
+  worldEnvironment: "staging" | "production";
+  worldRequired: boolean;
 };
 
 function req(name: string): string {
@@ -44,12 +64,13 @@ export function loadConfig(): AppConfig {
     const pinned = PINNED_DEPLOYMENTS[name];
     const id = req(`GRAPH_PROTOCOL_${name === "aave-v3" ? "A" : "B"}_ID`) || pinned.id;
     const explicit = req(`GRAPH_PROTOCOL_${name === "aave-v3" ? "A" : "B"}_URL`);
-    const url =
-      explicit ||
-      (key ? `${gateway.replace(/\/$/, "")}/${id}` : "") ||
-      (req("GRAPH_API_KEY_IN_PATH")
-        ? `https://gateway.thegraph.com/api/${key}/subgraphs/id/${id}`
-        : `https://gateway.thegraph.com/api/subgraphs/id/${id}`);
+    let url = explicit;
+    if (!url && key) {
+      url =
+        req("GRAPH_API_KEY_IN_PATH") === "1"
+          ? `https://gateway.thegraph.com/api/${key}/subgraphs/id/${id}`
+          : `${gateway.replace(/\/$/, "")}/${id}`;
+    }
     return { key: name, slug: pinned.slug, id, url };
   });
 
@@ -70,27 +91,49 @@ export function loadConfig(): AppConfig {
       .map((s) => s.trim())
       .filter(Boolean),
     rateLimitPerMin: Number(process.env.QUERY_RATE_LIMIT_PER_MIN ?? 6),
-    hopJoin: req("HOP_JOIN") === "cre" ? "cre" : "inline",
+    hopJoin: req("HOP_JOIN") === "inline" ? "inline" : "cre",
     creCwd: req("CRE_CWD") || path.resolve(here, "../../../cre"),
+    creEthPrivateKey: req("CRE_ETH_PRIVATE_KEY"),
+    creWorkflowId: req("CRE_WORKFLOW_ID"),
+    creGatewayUrl: req("CRE_GATEWAY_URL"),
     demoSign: req("HOP_DEMO_SIGN") === "1",
     demoAccountId: req("HEDERA_DEMO_ACCOUNT_ID"),
     demoPrivateKey: req("HEDERA_DEMO_PRIVATE_KEY"),
     hcsTopic: req("HEDERA_HCS_TOPIC"),
+    hcsAuto: req("HOP_HCS_AUTO") !== "0",
     hederaOperatorId: req("HEDERA_OPERATOR_ID"),
     hederaOperatorKey: req("HEDERA_OPERATOR_KEY"),
+    corsOrigin: req("HOP_CORS_ORIGIN") || "http://localhost:5173",
+    wallBuffer: Number(process.env.WALL_BUFFER ?? 0.2),
+    evidenceDir: req("HOP_EVIDENCE_DIR") || path.resolve(here, "../../../data/evidence"),
+    evidenceTtlMs: Number(process.env.HOP_EVIDENCE_TTL_MS ?? 72 * 3600 * 1000),
+    mandateJson: req("HOP_MANDATE_JSON") || DEFAULT_MANDATE_JSON,
+    mandateRequired: req("HOP_MANDATE_REQUIRED") === "1",
+    meterPerProtocol: req("HOP_METER_TINYBARS") || "10000",
+    meterUtilScale: req("HOP_METER_UTIL_TINYBARS") || "0",
+    worldAppId: req("WORLD_APP_ID"),
+    worldRpId: req("WORLD_RP_ID"),
+    worldRpSigningKey: req("WORLD_RP_SIGNING_KEY"),
+    worldAction: req("WORLD_ACTION") || "hop-query",
+    worldEnvironment: req("WORLD_ENVIRONMENT") === "production" ? "production" : "staging",
+    worldRequired: req("WORLD_REQUIRED") === "1",
   };
 }
 
-export function requirements(cfg: AppConfig, feePayer: string): PaymentRequirements {
+export function requirements(cfg: AppConfig, feePayer: string, amount = cfg.amount): PaymentRequirements {
   return {
     scheme: "exact",
     network: "hedera:testnet",
-    amount: cfg.amount,
+    amount,
     payTo: cfg.payTo,
     maxTimeoutSeconds: cfg.maxTimeoutSeconds,
     asset: cfg.asset,
     extra: { feePayer },
   };
+}
+
+export function quoteAmount(cfg: AppConfig, protocolCount: number, publicUtil?: number): string {
+  return priceTinybars(cfg.amount, protocolCount, cfg.meterPerProtocol, publicUtil, cfg.meterUtilScale);
 }
 
 export function queryParams(body: QueryRequest): Record<string, unknown> {

@@ -1,17 +1,13 @@
 /** Messari Lending/CDP schema 3.1.0. Position.side is COLLATERAL | BORROWER (not LENDER). */
 
-export const SNAPSHOT_QUERY = /* GraphQL */ `
-  query HopSnapshot {
+export const PROTOCOL_QUERY = /* GraphQL */ `
+  query HopProtocol {
     _meta {
       block {
         number
-        timestamp
       }
-      hasIndexingErrors
     }
     lendingProtocols {
-      id
-      name
       slug
       schemaVersion
       subgraphVersion
@@ -19,7 +15,12 @@ export const SNAPSHOT_QUERY = /* GraphQL */ `
       totalBorrowBalanceUSD
       totalDepositBalanceUSD
     }
-    markets(first: 1000) {
+  }
+`;
+
+export const MARKETS_QUERY = /* GraphQL */ `
+  query HopMarkets($skip: Int!) {
+    markets(first: 200, skip: $skip) {
       id
       name
       maximumLTV
@@ -34,6 +35,9 @@ export const SNAPSHOT_QUERY = /* GraphQL */ `
     }
   }
 `;
+
+/** @deprecated use PROTOCOL_QUERY + MARKETS_QUERY */
+export const SNAPSHOT_QUERY = PROTOCOL_QUERY;
 
 export const POSITIONS_QUERY = /* GraphQL */ `
   query HopPositions($skip: Int!) {
@@ -84,7 +88,7 @@ export const POSITIONS_QUERY_CLOSED_ZERO = /* GraphQL */ `
 export const LIQUIDATES_QUERY = /* GraphQL */ `
   query HopLiquidates($from: BigInt!, $to: BigInt!, $skip: Int!) {
     liquidates(
-      first: 1000
+      first: 200
       skip: $skip
       where: { timestamp_gte: $from, timestamp_lte: $to }
     ) {

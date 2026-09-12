@@ -1,5 +1,4 @@
 {
-  "schedule": "*/30 * * * * *",
   "query": "policy_check",
   "protocols": ["aave-v3", "compound-v3"],
   "max_block_lag": 50,

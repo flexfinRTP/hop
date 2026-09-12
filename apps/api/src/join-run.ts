@@ -10,11 +10,34 @@ import {
   type QueryRequest,
 } from "@hop/shared";
 import type { AppConfig } from "./config.js";
+import { creEvmAddress, triggerDeployedWorkflow } from "./cre-gateway.js";
 import { liveSnapshot } from "./graph.js";
 
 export type JoinOutcome = HopJoinResult & {
-  cre: { mode: "simulation" | "don"; artifact?: string };
+  cre: {
+    mode: "simulation" | "don";
+    artifact?: string;
+    tee?: string;
+    trigger?: "http";
+    report_hash?: string;
+    execution_id?: string;
+  };
 };
+
+function creConfig(cfg: AppConfig, request: QueryRequest) {
+  return {
+    query: request.query,
+    protocols: request.protocols,
+    max_block_lag: request.max_block_lag,
+    window: request.window,
+    chain_rpc_url: cfg.chainRpcUrl,
+    authorized_evm_address: cfg.creWorkflowId ? creEvmAddress(cfg.creEthPrivateKey) : undefined,
+    graph: {
+      schemaVersion: "3.1.0",
+      protocols: cfg.protocols.map((p) => ({ slug: p.slug, id: p.id, url: p.url })),
+    },
+  };
+}
 
 export async function runJoin(
   cfg: AppConfig,
@@ -27,71 +50,105 @@ export async function runJoin(
   }
 
   if (cfg.hopJoin === "cre") {
-    onTrace("cre", "cre workflow simulate hop-query --target staging-settings");
-    try {
-      const cre = await simulateCre(cfg, request);
-      onTrace("cre", "CRE: simulation");
-      return cre;
-    } catch (err) {
-      onTrace("cre", `CRE CLI failed; inline engine ${err instanceof Error ? err.message : ""}`.trim());
+    onTrace("cre", "handlerInTee HTTP Nitro us-west-2");
+    const cre = await simulateCre(cfg, request, onTrace);
+    if (cfg.creWorkflowId && cfg.creEthPrivateKey) {
+      try {
+        const don = await triggerDeployedWorkflow(cfg, {
+          query: request.query,
+          protocols: request.protocols,
+          max_block_lag: request.max_block_lag,
+          window: request.window,
+        });
+        onTrace("cre", `DON ${don.status ?? "ACCEPTED"} ${don.execution_id ?? ""}`.trim());
+        return {
+          ...cre,
+          cre: {
+            ...cre.cre,
+            mode: "don",
+            execution_id: don.execution_id,
+            artifact: don.execution_id ?? cre.cre.artifact,
+          },
+        };
+      } catch (err) {
+        onTrace("cre", `DON trigger failed ${err instanceof Error ? err.message : ""}`.trim());
+        return cre;
+      }
     }
+    return cre;
   }
 
   onTrace("graph", "live GraphQL two protocols Messari 3.1.0");
-  const snapshot = await liveSnapshot(cfg, request);
+  const snapshot = await liveSnapshot(cfg, request, policy, onTrace);
   for (const p of snapshot.protocols) {
     onTrace(
       "graph",
       `${p.slug} schemaVersion ${p.schemaVersion} block ${p.block ?? "?"} id ${p.deploymentId}`,
     );
   }
-  onTrace("cre", "handlerInTee join (inline engine; same as cre/hop-query)");
+  onTrace("cre", "HOP_JOIN=inline (same join as cre/hop-query)");
   const joined = joinAndAggregate(policy, snapshot, request);
   return {
     ...joined,
     aggregate: sanitizeAggregate(joined.aggregate),
     cre: {
       mode: "simulation",
-      artifact: cfg.hopJoin === "cre" ? "inline-fallback" : "handlerInTee-inline",
+      artifact: "handlerInTee-inline",
+      trigger: "http",
     },
   };
 }
 
-async function simulateCre(cfg: AppConfig, request: QueryRequest): Promise<JoinOutcome> {
-  const configPath = path.join(cfg.creCwd, "hop-query", "config.staging.json");
-  const graph = {
-    schemaVersion: "3.1.0",
-    graph_auth_header: cfg.graphApiKey ? `Bearer ${cfg.graphApiKey}` : "",
-    protocols: cfg.protocols.map((p) => ({ slug: p.slug, id: p.id, url: p.url })),
-  };
+async function simulateCre(
+  cfg: AppConfig,
+  request: QueryRequest,
+  onTrace: (rail: "graph" | "cre", msg: string) => void,
+): Promise<JoinOutcome> {
+  const workflowDir = path.join(cfg.creCwd, "hop-query");
+  await writeFile(path.join(workflowDir, "config.runtime.json"), JSON.stringify(creConfig(cfg, request), null, 2));
   await writeFile(
-    configPath,
-    JSON.stringify(
-      {
-        schedule: "*/30 * * * * *",
-        query: request.query,
-        protocols: request.protocols,
-        max_block_lag: request.max_block_lag,
-        window: request.window,
-        chain_rpc_url: cfg.chainRpcUrl,
-        graph,
-      },
-      null,
-      2,
-    ),
+    path.join(workflowDir, "http-payload.json"),
+    JSON.stringify({
+      query: request.query,
+      protocols: request.protocols,
+      max_block_lag: request.max_block_lag,
+      window: request.window,
+    }),
   );
 
+  const envFile = path.join(cfg.creCwd, ".env");
+  const args = [
+    "workflow",
+    "simulate",
+    "hop-query",
+    "--target",
+    "staging-settings",
+    "--non-interactive",
+    "--trigger-index",
+    "0",
+    "--http-payload",
+    "@hop-query/http-payload.json",
+    "--env",
+    envFile,
+  ];
+  onTrace("cre", `cre ${args.join(" ")}`);
+
   const stdout = await new Promise<string>((resolve, reject) => {
-    const child = spawn("cre", ["workflow", "simulate", "hop-query", "--target", "staging-settings"], {
+    const child = spawn("cre", args, {
       cwd: cfg.creCwd,
       shell: true,
+      env: {
+        ...process.env,
+        HOP_POLICY_TABLE_JSON: cfg.policyJson,
+        GRAPH_API_KEY: cfg.graphApiKey,
+      },
     });
     let out = "";
     let err = "";
     const timer = setTimeout(() => {
       child.kill();
       reject(new Error("cre_timeout"));
-    }, 120_000);
+    }, 180_000);
     child.stdout.on("data", (d) => {
       out += String(d);
     });
@@ -105,7 +162,7 @@ async function simulateCre(cfg: AppConfig, request: QueryRequest): Promise<JoinO
     child.on("close", (code) => {
       clearTimeout(timer);
       if (code !== 0) reject(new Error(err || `cre_exit_${code}`));
-      else resolve(out);
+      else resolve(`${out}\n${err}`);
     });
   });
 
@@ -113,20 +170,31 @@ async function simulateCre(cfg: AppConfig, request: QueryRequest): Promise<JoinO
   if (json && json.error === "policy_unavailable") {
     throw Object.assign(new Error("policy_unavailable"), { code: "policy_unavailable" });
   }
-  if (!json || !json.status) {
+  if (!json || json.error) {
+    throw new Error(json?.error ?? "cre_no_result");
+  }
+  if (!json.status) {
     throw new Error("cre_no_result");
   }
+  const teeBanner = /TEE Execution|AWS Nitro/i.test(stdout);
+  onTrace("cre", teeBanner ? "TEE requested AWS Nitro us-west-2" : "CRE HTTP trigger");
   return {
     status: json.status,
     aggregate: sanitizeAggregate(json.aggregate),
     k_anon: json.k_anon ?? { result: "not_applicable" },
     graph: json.graph ?? { deployments: [] },
     policy: json.policy ?? { version: "unknown", threshold_hash: hashAggregate({}) },
-    cre: json.cre ?? { mode: "simulation", artifact: stdout.slice(-2000) },
+    cre: {
+      mode: json.cre?.mode === "don" ? "don" : "simulation",
+      artifact: json.cre?.artifact ?? stdout.replace(/\s+/g, " ").slice(-1500),
+      tee: json.cre?.tee ?? "nitro:us-west-2",
+      trigger: "http",
+      report_hash: json.cre?.report_hash,
+    },
   };
 }
 
-function extractJson(text: string): JoinOutcome & { error?: string } | null {
+function extractJson(text: string): (JoinOutcome & { error?: string }) | null {
   const matches = text.match(/\{[\s\S]*\}/g);
   if (!matches) return null;
   for (let i = matches.length - 1; i >= 0; i--) {

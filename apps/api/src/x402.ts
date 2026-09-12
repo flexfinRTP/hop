@@ -1,19 +1,25 @@
-import type { AppConfig } from "./config.js";
 import type { PaymentRequirements } from "@hop/shared";
+import type { AppConfig } from "./config.js";
+import { getJson, postJson } from "./http.js";
 
 type Supported = {
   kinds?: { scheme?: string; network?: string; extra?: { feePayer?: string } }[];
   signers?: Record<string, string[]>;
 };
 
+let feePayerCache: { at: number; value: string } | null = null;
+const FEE_PAYER_TTL_MS = 30_000;
+
 export async function facilitatorFeePayer(cfg: AppConfig): Promise<string> {
+  if (feePayerCache && Date.now() - feePayerCache.at < FEE_PAYER_TTL_MS) {
+    return feePayerCache.value;
+  }
   const url = `${cfg.facilitatorUrl.replace(/\/$/, "")}/supported`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`facilitator_supported_${res.status}`);
-  const json = (await res.json()) as Supported;
+  const json = await getJson<Supported>(url);
   const kind = json.kinds?.find((k) => k.network === "hedera:testnet");
   const feePayer = kind?.extra?.feePayer ?? json.signers?.["hedera:*"]?.[0];
   if (!feePayer) throw new Error("facilitator_fee_payer_missing");
+  feePayerCache = { at: Date.now(), value: feePayer };
   return feePayer;
 }
 
@@ -49,18 +55,19 @@ async function postFacilitator<T>(
   paymentPayload: unknown,
   paymentRequirements: PaymentRequirements,
 ): Promise<T> {
-  const res = await fetch(`${cfg.facilitatorUrl.replace(/\/$/, "")}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  const res = await postJson(
+    `${cfg.facilitatorUrl.replace(/\/$/, "")}${path}`,
+    {
       x402Version: 2,
       paymentPayload,
       paymentRequirements,
-    }),
-  });
-  const json = (await res.json()) as T & { message?: string };
-  if (!res.ok) {
-    throw new Error((json as { message?: string }).message ?? `facilitator_${path}_${res.status}`);
+    },
+    {},
+    30_000,
+  );
+  const json = JSON.parse(res.text) as T & { message?: string };
+  if (res.status < 200 || res.status >= 300) {
+    throw new Error(json.message ?? `facilitator_${path}_${res.status}`);
   }
   return json;
 }

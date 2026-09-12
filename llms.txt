@@ -9,8 +9,17 @@ Confidential lending-risk query. HTTP 402 + OpenAPI. Fixed query types only.
 
 ## Routes
 
-- POST /v1/query — Hedera exact x402 (Blocky402). Header Idempotency-Key required on paid retry.
+- POST /v1/query — Hedera exact x402 (Blocky402). Header Idempotency-Key required on paid retry. Optional X-Hop-Mandate, X-Hop-Confirm, X-Hop-World.
 - GET /v1/evidence/{id} — public evidence (hashes). No Account.id. No policy caps.
+- GET /v1/evidence/{id}/peac — PEAC-shaped receipt
+- GET /v1/evidence/{id}/verify — recompute aggregate hash
+- GET /v1/mandate — remaining budget (does not pay)
+- GET /v1/meta — rails, mandate remaining, HCS, CRE, World ID, posture. No secrets.
+- GET /v1/world — World ID readiness
+- POST /v1/world/rp-context — RP signature
+- POST /v1/world/verify — World ID 4.0 Cloud verify → hop token
+
+MCP: `hop_query`, `hop_evidence`, `hop_peac`, `hop_verify`, `hop_mandate`, `hop_meta` (`npm run mcp`). SKILL: `skills/hop-query/SKILL.md`.
 
 ## Settlement
 
@@ -19,6 +28,11 @@ Confidential lending-risk query. HTTP 402 + OpenAPI. Fixed query types only.
 - extra.feePayer: from facilitator GET /supported — must match
 - Client: @x402/hedera ExactHederaScheme + createClientHederaSigner
 - Not Graph Base USDC x402
+- Amount may meter extra per extra protocol (public). Never the secret cap.
+
+## Mandate
+
+Deterministic budget/velocity/expiry. LLM never pays. 403 mandate_* is not charged.
 
 ## Query types
 

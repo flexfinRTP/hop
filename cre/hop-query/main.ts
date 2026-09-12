@@ -1,16 +1,21 @@
 import {
-  CronCapability,
+  HTTPCapability,
   HTTPClient,
+  decodeJson,
   handlerInTee,
   ok,
   Runner,
   text,
+  type HTTPPayload,
   type TeeRuntime,
 } from "@chainlink/cre-sdk";
 import {
+  creCommitment,
   fetchProtocolSnapshotSync,
+  hashAggregate,
   joinAndAggregate,
   parsePolicyTable,
+  sanitizeAggregate,
   type GraphHttp,
   type QueryRequest,
   type QueryType,
@@ -23,18 +28,20 @@ type GraphCfg = {
 };
 
 type Config = {
-  schedule: string;
   query: QueryType;
   protocols: string[];
   max_block_lag: number;
   window?: { from: string; to: string };
   chain_rpc_url: string;
+  authorized_evm_address?: string;
   graph: {
     schemaVersion: string;
     graph_auth_header?: string;
     protocols: GraphCfg[];
   };
 };
+
+const NITRO_US_WEST_2 = [{ tee: "nitro" as const, regions: ["us-west-2"] }];
 
 function creHttp(runtime: TeeRuntime<Config>): GraphHttp {
   const client = new HTTPClient();
@@ -95,7 +102,42 @@ function authHeaders(config: Config, runtime: TeeRuntime<Config>): Record<string
   return headers;
 }
 
-const onQuery = (runtime: TeeRuntime<Config>): string => {
+function queryFromPayload(runtime: TeeRuntime<Config>, payload: HTTPPayload): QueryRequest {
+  let decoded: Partial<QueryRequest> = {};
+  try {
+    decoded = decodeJson<Partial<QueryRequest>>(payload.input);
+  } catch {
+    decoded = {};
+  }
+  const query = decoded.query ?? runtime.config.query;
+  const protocols = decoded.protocols ?? runtime.config.protocols;
+  const max_block_lag = decoded.max_block_lag ?? runtime.config.max_block_lag;
+  if (!query || !Array.isArray(protocols) || protocols.length < 1 || !Number.isFinite(max_block_lag)) {
+    throw new Error("bad_http_payload");
+  }
+  return {
+    query,
+    protocols,
+    max_block_lag,
+    window: decoded.window ?? runtime.config.window,
+  };
+}
+
+function reportCommitment(runtime: TeeRuntime<Config>, commitment: Record<string, unknown>): string {
+  const encoded = Buffer.from(JSON.stringify(commitment)).toString("base64");
+  const donRuntime = runtime.usingTheDons();
+  donRuntime
+    .report({
+      encodedPayload: encoded,
+      encoderName: "evm",
+      signingAlgo: "ecdsa",
+      hashingAlgo: "keccak256",
+    })
+    .result();
+  return encoded;
+}
+
+const onQuery = (runtime: TeeRuntime<Config>, payload: HTTPPayload): string => {
   let policyRaw = "";
   try {
     policyRaw = runtime.getSecret({ id: "POLICY_TABLE" }).result().value ?? "";
@@ -107,13 +149,7 @@ const onQuery = (runtime: TeeRuntime<Config>): string => {
     return JSON.stringify({ error: "policy_unavailable" });
   }
 
-  const request: QueryRequest = {
-    query: runtime.config.query,
-    protocols: runtime.config.protocols,
-    max_block_lag: runtime.config.max_block_lag,
-    window: runtime.config.window,
-  };
-
+  const request = queryFromPayload(runtime, payload);
   const http = creHttp(runtime);
   const headers = authHeaders(runtime.config, runtime);
   const protocols = runtime.config.graph.protocols.filter((p) => p.url);
@@ -132,14 +168,34 @@ const onQuery = (runtime: TeeRuntime<Config>): string => {
           deploymentId: p.id,
           authHeaders: headers,
           request,
+          policy,
           chainHead: head,
         }),
       ),
     };
     const joined = joinAndAggregate(policy, snapshot, request);
+    const aggregate = sanitizeAggregate(joined.aggregate);
+    const commitment = creCommitment({
+      status: joined.status,
+      policy_hash: joined.policy.threshold_hash,
+      aggregate_hash: hashAggregate(aggregate),
+      k_anon: joined.k_anon,
+      graph: joined.graph,
+    });
+    const report_hash = reportCommitment(runtime, commitment);
     return JSON.stringify({
-      cre: { mode: "simulation", artifact: "handlerInTee" },
-      ...joined,
+      cre: {
+        mode: "simulation",
+        artifact: "handlerInTee",
+        tee: "nitro:us-west-2",
+        trigger: "http",
+        report_hash,
+      },
+      status: joined.status,
+      aggregate,
+      k_anon: joined.k_anon,
+      graph: joined.graph,
+      policy: joined.policy,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "join_error";
@@ -148,8 +204,18 @@ const onQuery = (runtime: TeeRuntime<Config>): string => {
 };
 
 const initWorkflow = (config: Config) => {
-  const cron = new CronCapability();
-  return [handlerInTee(cron.trigger({ schedule: config.schedule }), onQuery, {})];
+  const http = new HTTPCapability();
+  const trigger = config.authorized_evm_address
+    ? http.trigger({
+        authorizedKeys: [
+          {
+            type: "KEY_TYPE_ECDSA_EVM",
+            publicKey: config.authorized_evm_address,
+          },
+        ],
+      })
+    : http.trigger({});
+  return [handlerInTee(trigger, onQuery, NITRO_US_WEST_2)];
 };
 
 export async function main() {

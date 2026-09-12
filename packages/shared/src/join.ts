@@ -1,4 +1,4 @@
-import { hashJson } from "./hash.js";
+import { metricHash, sanitizeAggregate } from "./egress.js";
 import { compare, thresholdHash } from "./policy.js";
 import {
   K_ANON,
@@ -74,6 +74,7 @@ function observedForCap(cap: PolicyCap, snapshot: HopSnapshot): number | null {
     case "utilization": {
       if (utils.length === 0) return null;
       if ((cap.scope ?? "all") === "all") {
+        if (utils.length < protocols.length) return null;
         return Math.min(...utils);
       }
       return Math.max(...utils);
@@ -262,7 +263,7 @@ export function joinAndAggregate(
     const ltv = accountLtv(snapshot, policy.k ?? K_ANON);
     return {
       status: ltv.status,
-      aggregate: ltv.aggregate,
+      aggregate: sanitizeAggregate(ltv.aggregate),
       k_anon: ltv.k_anon,
       graph,
       policy: policyMeta,
@@ -284,7 +285,7 @@ export function joinAndAggregate(
       const check = policyCheck(snapshot, policy);
       aggregate = {
         breached: check.breached,
-        metric: check.metric,
+        metric_hash: metricHash(check.metric),
         observed: check.observed,
         k_anon: "not_applicable",
         protocols: snapshot.protocols.map((p) => ({
@@ -300,7 +301,7 @@ export function joinAndAggregate(
 
   return {
     status: request.query === "policy_check" && aggregate.breached === true ? "reject" : "accept",
-    aggregate,
+    aggregate: sanitizeAggregate(aggregate),
     k_anon: { result: "not_applicable" },
     graph,
     policy: policyMeta,
@@ -309,18 +310,4 @@ export function joinAndAggregate(
 
 export function dropAccountIds<T>(value: T): T {
   return value;
-}
-
-/** Strip wallet rows if any leak into an object before JSON out. */
-export function sanitizeAggregate(aggregate: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
-  if (!aggregate) return undefined;
-  const json = JSON.stringify(aggregate);
-  if (/account/i.test(json) && /0x[a-fA-F0-9]{40}/.test(json)) {
-    return { error: "sanitized" };
-  }
-  return aggregate;
-}
-
-export function hashAggregate(aggregate: Record<string, unknown> | undefined): string {
-  return hashJson(aggregate ?? { omitted: true });
 }

@@ -1,15 +1,40 @@
 import { Hono } from "hono";
 import {
+  GENESIS_CHAIN,
+  POSTURE,
   QUERY_TYPES,
+  chainHash,
+  evaluateMandate,
   hashJson,
+  hopReason,
+  parseMandate,
   parsePolicyTable,
+  peacFromEvidence,
+  peacHash,
+  type Evidence,
+  type Mandate,
   type QueryRequest,
   type QueryType,
 } from "@hop/shared";
-import { loadConfig, queryParams, requirements } from "../config.js";
+import { loadConfig, queryParams, quoteAmount, requirements } from "../config.js";
+import { cachedPublicUtil } from "../graph.js";
+import { submitReceiptHash } from "../hcs.js";
 import { runJoin } from "../join-run.js";
 import { allowPayer, rateOk } from "../rate-limit.js";
-import { emit, getByIdempotency, getTrace, newId, put } from "../store.js";
+import {
+  currentChain,
+  emit,
+  getByIdempotency,
+  getSpend,
+  getTrace,
+  hopsInWindow,
+  newId,
+  paymentHashOf,
+  paymentReplay,
+  put,
+  releaseMandate,
+  reserveMandate,
+} from "../store.js";
 import {
   decodePayment,
   encodeJsonHeader,
@@ -18,6 +43,7 @@ import {
   settlePayment,
   verifyPayment,
 } from "../x402.js";
+import { hashNullifier, readWorldToken, worldReady } from "../world.js";
 
 function isQueryType(v: unknown): v is QueryType {
   return typeof v === "string" && (QUERY_TYPES as readonly string[]).includes(v);
@@ -44,6 +70,23 @@ function parseRequest(body: unknown): QueryRequest | { error: string } {
   return req;
 }
 
+function resolveMandate(
+  c: { req: { header: (name: string) => string | undefined } },
+  fallback: string,
+): { mandate: Mandate | null; error?: string } {
+  const header = c.req.header("X-Hop-Mandate") || c.req.header("x-hop-mandate");
+  const server = parseMandate(fallback);
+  if (header) {
+    const client = parseMandate(header);
+    if (!client) return { mandate: null, error: "bad_mandate" };
+    if (server) {
+      return { mandate: { ...server, agent_id: client.agent_id || server.agent_id } };
+    }
+    return { mandate: client };
+  }
+  return { mandate: server };
+}
+
 export const query = new Hono();
 
 query.post("/", async (c) => {
@@ -55,6 +98,8 @@ query.post("/", async (c) => {
     return c.json({ error: parsed.error }, 400);
   }
 
+  const publicUtil = cachedPublicUtil(parsed);
+  const amount = quoteAmount(cfg, parsed.protocols.length, publicUtil);
   const paymentHeader = paymentFromHeaders(c);
   if (!paymentHeader) {
     emit(traceId, "hedera", "GET facilitator /supported");
@@ -68,13 +113,17 @@ query.post("/", async (c) => {
     if (!cfg.payTo) {
       return c.json({ error: "merchant_unconfigured" }, 503);
     }
-    const accepts = [requirements(cfg, feePayer)];
+    const accepts = [requirements(cfg, feePayer, amount)];
     const required = {
       x402Version: 2 as const,
       resource: { url: "/v1/query", mimeType: "application/json" },
       accepts,
     };
-    emit(traceId, "hedera", `402 hedera:testnet asset ${cfg.asset} feePayer ${feePayer}`);
+    emit(
+      traceId,
+      "hedera",
+      `402 hedera:testnet asset ${cfg.asset} amount ${amount} feePayer ${feePayer}`,
+    );
     c.header("PAYMENT-REQUIRED", encodeJsonHeader(required));
     return c.json({ x402Version: 2, accepts, trace: getTrace(traceId) }, 402);
   }
@@ -96,6 +145,8 @@ query.post("/", async (c) => {
         status: existing.json.status,
         aggregate: existing.aggregate,
         evidence: existing.json,
+        reason: existing.json.reason,
+        mandate: existing.json.mandate,
         trace: getTrace(traceId),
       },
       200,
@@ -109,13 +160,35 @@ query.post("/", async (c) => {
     return c.json({ error: "bad_payment" }, 400);
   }
 
+  const payHash = paymentHashOf(payload);
+  if (paymentReplay(payHash, idem) === "replay") {
+    emit(traceId, "hedera", "X-PAYMENT replay");
+    return c.json({ error: "payment_replay" }, 400);
+  }
+
+  if (cfg.protocols.filter((p) => p.url).length < 1) {
+    emit(traceId, "graph", "graph_unconfigured");
+    return c.json({ error: "graph_unconfigured" }, 503);
+  }
+
   let feePayer: string;
   try {
     feePayer = await facilitatorFeePayer(cfg);
   } catch {
     return c.json({ error: "facilitator_unavailable" }, 503);
   }
-  const reqs = requirements(cfg, feePayer);
+  const reqs = requirements(cfg, feePayer, amount);
+
+  const resolved = resolveMandate(c, cfg.mandateJson);
+  if (resolved.error) {
+    emit(traceId, "hop", "bad_mandate");
+    return c.json({ error: "bad_mandate" }, 400);
+  }
+  const mandate = resolved.mandate;
+  if (cfg.mandateRequired && !mandate) {
+    emit(traceId, "hop", "mandate_required");
+    return c.json({ error: "mandate_required" }, 403);
+  }
 
   emit(traceId, "hedera", "POST Blocky402 /verify");
   let verify: { isValid?: boolean; payer?: string };
@@ -136,7 +209,45 @@ query.post("/", async (c) => {
     return c.json({ error: "rate_limited" }, 429);
   }
 
+  const worldToken = c.req.header("X-Hop-World") || c.req.header("x-hop-world");
+  const worldSession = readWorldToken(cfg, worldToken);
+  if (cfg.worldRequired && worldReady(cfg) && !worldSession) {
+    emit(traceId, "world", "world_required");
+    return c.json({ error: "world_required" }, 403);
+  }
+  if (worldSession) {
+    emit(traceId, "world", "unique human");
+  }
+
+  const amountN = Number(amount);
+  let reserved: Mandate | null = null;
+  let decision: ReturnType<typeof evaluateMandate> | undefined;
+  if (mandate) {
+    const now = Date.now();
+    const bound = mandate.pay_to ? mandate : { ...mandate, pay_to: cfg.payTo };
+    decision = evaluateMandate(bound, {
+      payTo: cfg.payTo,
+      amountTinybars: amountN,
+      query: parsed.query,
+      maxBlockLag: parsed.max_block_lag,
+      now,
+      spentTinybars: getSpend(bound.id).spent_tinybars,
+      hopsInWindow: hopsInWindow(bound.id, bound.window_s, now),
+      confirmed: c.req.header("X-Hop-Confirm") === "1" || c.req.header("x-hop-confirm") === "1",
+    });
+    emit(traceId, "hop", `${decision.result} ${decision.reason}`);
+    if (decision.result === "DENY") {
+      return c.json({ error: decision.reason, mandate: decision }, 403);
+    }
+    if (decision.result === "REVIEW") {
+      return c.json({ error: "mandate_review", mandate: decision }, 403);
+    }
+    reserved = bound;
+    reserveMandate(bound.id, amountN, now);
+  }
+
   if (!parsePolicyTable(cfg.policyJson)) {
+    if (reserved) releaseMandate(reserved.id, amountN);
     emit(traceId, "cre", "policy_unavailable");
     return c.json({ error: "policy_unavailable" }, 503);
   }
@@ -146,9 +257,11 @@ query.post("/", async (c) => {
   try {
     settle = await settlePayment(cfg, payload, reqs);
   } catch {
+    if (reserved) releaseMandate(reserved.id, amountN);
     return c.json({ error: "bad_payment" }, 400);
   }
   if (!settle.success) {
+    if (reserved) releaseMandate(reserved.id, amountN);
     emit(traceId, "hedera", "settle failed");
     return c.json({ error: "bad_payment" }, 400);
   }
@@ -158,19 +271,32 @@ query.post("/", async (c) => {
   let joined;
   try {
     joined = await runJoin(cfg, parsed, (rail, msg) => emit(traceId, rail, msg));
-  } catch {
-    emit(traceId, "graph", "join failed after settle; stale");
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : "join_error";
+    emit(traceId, "graph", `join failed after settle: ${detail}`);
     joined = {
       status: "stale" as const,
       k_anon: { result: "not_applicable" as const },
       graph: { deployments: [] },
       policy: { version: "unknown", threshold_hash: hashJson({}) },
-      cre: { mode: "simulation" as const, artifact: "join_failed" },
+      cre: { mode: "simulation" as const, artifact: detail.slice(0, 240) },
     };
   }
 
   const id = newId();
-  const evidence = {
+  const reason = hopReason(joined);
+  const prev = currentChain().prev || GENESIS_CHAIN;
+  const mandateHash = decision?.mandate_hash;
+  const link = chainHash({
+    id,
+    aggregate_hash: hashJson(joined.aggregate ?? { omitted: true }),
+    settlement: settlementRef,
+    prev,
+    mandate_hash: mandateHash,
+  });
+  const spent = reserved ? getSpend(reserved.id) : undefined;
+
+  const evidence: Evidence = {
     id,
     timestamp: new Date().toISOString(),
     payer_account: payer,
@@ -182,15 +308,53 @@ query.post("/", async (c) => {
     settlement: { ref: settlementRef },
     cre: joined.cre,
     status: joined.status,
+    hcs_seq: undefined,
+    world: worldSession ? { nullifier_hash: hashNullifier(worldSession.nullifier_hash) } : undefined,
+    mandate: reserved && decision
+      ? {
+          id: reserved.id,
+          hash: decision.mandate_hash,
+          remaining_tinybars: Math.max(0, reserved.max_tinybars - (spent?.spent_tinybars ?? 0)),
+          remaining_hops: decision.remaining_hops,
+          decision: decision.result,
+        }
+      : undefined,
+    chain: { prev, hash: link },
+    meter: { amount, protocols: parsed.protocols.length, util: publicUtil },
+    reason,
+    posture: {
+      ...POSTURE,
+      cre: joined.cre.mode,
+      world: worldSession ? "unique_human" : "off",
+    },
   };
+  evidence.peac_hash = peacHash(peacFromEvidence(evidence));
 
-  put({
+  try {
+    const seq = await submitReceiptHash(cfg, id, evidence.aggregate_hash, settlementRef, {
+      mandate_hash: mandateHash,
+      chain_hash: link,
+      policy_hash: evidence.policy.threshold_hash,
+      cre_report_hash: joined.cre.report_hash,
+      world_hash: evidence.world?.nullifier_hash,
+    });
+    if (seq !== undefined) {
+      evidence.hcs_seq = seq;
+      emit(traceId, "hedera", `HCS seq ${seq}`);
+    }
+  } catch {
+    emit(traceId, "hedera", "HCS submit skipped");
+  }
+
+  await put({
     id,
     idempotencyKey: idem,
     bodyHash,
+    paymentHash: payHash,
     json: evidence,
     aggregate: joined.aggregate,
     settled: true,
+    storedAt: Date.now(),
   });
 
   c.header(
@@ -208,6 +372,8 @@ query.post("/", async (c) => {
       status: joined.status,
       aggregate: joined.aggregate,
       evidence,
+      reason,
+      mandate: evidence.mandate,
       trace: getTrace(traceId),
     },
     200,

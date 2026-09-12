@@ -57,7 +57,8 @@ cre/**/node_modules/
 cre/**/bun.lockb
 cre/.env
 cre/**/.env
+cre/hop-query/http-payload.json
 
-# OS
-.DS_Store
-Thumbs.db
+# Local evidence receipts
+data/
+

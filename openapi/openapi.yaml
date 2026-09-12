@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Hop
   description: Confidential lending-risk query. Hedera exact x402 (Blocky402). Aggregates only.
-  version: 0.0.1
+  version: 0.0.36
 servers:
   - url: http://localhost:8787
 paths:
@@ -17,10 +17,22 @@ paths:
           description: Required on paid retry. Same key → same evidence id, no second settle.
           schema:
             type: string
-        - name: X-PAYMENT
+        - name: X-Hop-Mandate
           in: header
           required: false
-          description: Base64 PaymentPayload from ExactHederaScheme. Missing → 402.
+          description: Mandate JSON or base64. Budget, velocity, expiry. LLM never pays.
+          schema:
+            type: string
+        - name: X-Hop-Confirm
+          in: header
+          required: false
+          description: "1 after mandate_review (human threshold)."
+          schema:
+            type: string
+        - name: X-Hop-World
+          in: header
+          required: false
+          description: World ID session token from POST /v1/world/verify. Required when WORLD_REQUIRED=1.
           schema:
             type: string
       requestBody:
@@ -44,8 +56,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PaymentRequired"
+        "403":
+          description: payer_denied, world_required, or mandate DENY/REVIEW — not charged
+        "429":
+          description: rate_limited — not charged
         "503":
-          description: policy_unavailable — not charged
+          description: policy_unavailable | graph_unconfigured | facilitator_unavailable | merchant_unconfigured — not charged
           content:
             application/json:
               schema:
@@ -69,6 +85,112 @@ paths:
                 $ref: "#/components/schemas/Evidence"
         "404":
           description: Unknown id
+  /v1/meta:
+    get:
+      operationId: meta
+      summary: Public rails, mandate remaining, HCS, posture (no secrets, no caps)
+      responses:
+        "200":
+          description: Meta
+  /v1/mandate:
+    get:
+      operationId: mandate
+      summary: Remaining mandate budget and velocity. Does not pay.
+      parameters:
+        - name: X-Hop-Mandate
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Mandate inspect
+        "404":
+          description: mandate_missing
+  /v1/evidence/{id}/peac:
+    get:
+      operationId: getPeac
+      summary: PEAC-shaped portable receipt
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: PEAC-shaped JSON
+        "404":
+          description: Unknown id
+  /v1/evidence/{id}/verify:
+    get:
+      operationId: verifyEvidence
+      summary: Recompute aggregate hash and check chain link
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Verify
+        "404":
+          description: Unknown id
+  /v1/events/{id}:
+    get:
+      operationId: events
+      summary: SSE live trace
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: text/event-stream
+  /v1/demo/sign:
+    post:
+      operationId: demoSign
+      summary: Opt-in ExactHederaScheme signer (HOP_DEMO_SIGN=1)
+      responses:
+        "200":
+          description: payment base64
+        "403":
+          description: demo_sign_disabled
+  /v1/world:
+    get:
+      operationId: worldMeta
+      summary: World ID readiness (no secrets)
+      responses:
+        "200":
+          description: World ID config flags
+  /v1/world/rp-context:
+    post:
+      operationId: worldRpContext
+      summary: Sign World ID 4.0 RP context (signing key stays on server)
+      responses:
+        "200":
+          description: rp_context fields
+        "503":
+          description: world_unconfigured
+  /v1/world/verify:
+    post:
+      operationId: worldVerify
+      summary: Forward IDKit result to developer.world.org /api/v4/verify and return a hop session token
+      responses:
+        "200":
+          description: token
+        "400":
+          description: verify failed
+  /health:
+    get:
+      operationId: health
+      responses:
+        "200":
+          description: ok
+
 components:
   schemas:
     QueryType:
@@ -123,6 +245,12 @@ components:
           additionalProperties: true
         evidence:
           $ref: "#/components/schemas/Evidence"
+        reason:
+          type: object
+        mandate:
+          type: object
+        trace:
+          type: array
     PaymentRequired:
       type: object
       required: [x402Version, accepts]
@@ -168,7 +296,31 @@ components:
       properties:
         error:
           type: string
-          enum: [policy_unavailable, not_implemented, bad_payment, idempotency_required, payer_denied, rate_limited, not_found]
+          enum:
+            - policy_unavailable
+            - not_implemented
+            - bad_payment
+            - idempotency_required
+            - idempotency_conflict
+            - payer_denied
+            - rate_limited
+            - not_found
+            - payment_replay
+            - graph_unconfigured
+            - payload_too_large
+            - facilitator_unavailable
+            - merchant_unconfigured
+            - mandate_required
+            - mandate_expired
+            - mandate_merchant
+            - mandate_query
+            - mandate_freshness
+            - mandate_per_call
+            - mandate_budget
+            - mandate_velocity
+            - world_required
+            - mandate_review
+            - bad_mandate
     Evidence:
       type: object
       required:
@@ -251,8 +403,77 @@ components:
               enum: [simulation, don]
             artifact:
               type: string
+            tee:
+              type: string
+            trigger:
+              type: string
+            report_hash:
+              type: string
+            execution_id:
+              type: string
+        world:
+          type: object
+          properties:
+            nullifier_hash:
+              type: string
+              description: SHA-256 of World ID nullifier. Not the raw nullifier.
         status:
           $ref: "#/components/schemas/QueryStatus"
         hcs_seq:
           type: integer
-          description: Optional. Not in MVP until paid query works.
+          description: HCS topic sequence when operator (and topic or HOP_HCS_AUTO) is set
+        mandate:
+          type: object
+          properties:
+            id:
+              type: string
+            hash:
+              type: string
+            remaining_tinybars:
+              type: integer
+            remaining_hops:
+              type: integer
+            decision:
+              type: string
+              enum: [ALLOW, DENY, REVIEW]
+        chain:
+          type: object
+          properties:
+            prev:
+              type: string
+            hash:
+              type: string
+        meter:
+          type: object
+          properties:
+            amount:
+              type: string
+            protocols:
+              type: integer
+        peac_hash:
+          type: string
+        reason:
+          type: object
+          properties:
+            stamp:
+              type: string
+            metric_hash:
+              type: string
+            observed:
+              type: number
+            freshness:
+              type: string
+              enum: [live, stale]
+        posture:
+          type: object
+          properties:
+            custody:
+              type: string
+            ofac:
+              type: string
+            mor:
+              type: string
+            cre:
+              type: string
+            ats:
+              type: string

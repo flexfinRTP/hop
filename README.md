@@ -23,15 +23,13 @@ Hop API ── 402 PaymentRequirements
     │
     │  retry + X-PAYMENT + Idempotency-Key
     ▼
-CRE handlerInTee (CLI sim until live DON)
-    │  1. load private policy table (secret)
-    │  2. fetch live Graph (two protocols, schema 3.1.0)
-    │  3. join + aggregate  (no Account.id, no caps out)
+CRE handlerInTee (HTTP trigger, Nitro us-west-2)
+    │  1. getSecret POLICY_TABLE inside the enclave
+    │  2. live Graph HTTP from TeeRuntime (two Messari 3.1.0 protocols)
+    │  3. join + aggregate (no Account.id, no caps, metric hashed)
+    │  4. usingTheDons().report() hashes + stamp only
     ▼
-200 aggregate + evidence hashes
-    │
-    ▼
-GET /v1/evidence/{id}   (public: hashes, Graph block, settlement ref)
+200 aggregate + evidence hashes (+ HCS commitments)
 ```
 
 Graph is the public join key. The confidential input is the policy table inside CRE. Empty table = `policy_unavailable` (503, not charged).
@@ -42,9 +40,11 @@ Badge until a live DON: `CRE: simulation`. Rails label: `data: Graph (EVM) · pa
 
 | Path | Role |
 | --- | --- |
-| `apps/api` | `POST /v1/query`, `GET /v1/evidence/{id}` |
-| `apps/web` | Workbench (labels only) |
+| `apps/api` | `POST /v1/query`, `GET /v1/evidence/{id}`, `GET /v1/meta` |
+| `apps/web` | `/` marketing · `/app` console · `/desk` night desk |
+| `apps/mcp` | MCP `hop_query` / `hop_evidence` |
 | `cre/hop-query` | CRE workflow: `handlerInTee` |
+| `skills/hop-query` | Agent SKILL for the 402 retry |
 | `openapi/openapi.yaml` | Contract |
 | `llms.txt` | Pointer to OpenAPI |
 
@@ -81,15 +81,15 @@ Two live Messari Lending/CDP **3.1.0** subgraphs (intended: Aave v3 + Compound v
 
 ## CRE
 
-From `cre/` (needs [CRE CLI](https://docs.chain.link/cre) + Bun):
+Default `HOP_JOIN=cre`: paid hop runs `cre workflow simulate hop-query --non-interactive --trigger-index 0 --http-payload ...` (WASM `handlerInTee`, live Graph/RPC). No inline fallback on that path. Set `HOP_JOIN=inline` only for local join without the CRE CLI.
+
+CLI simulation is the ETHOnline-qualified TEE path and makes live HTTP calls. Live DON: set `CRE_WORKFLOW_ID` (invite) to also POST `workflows.execute` to the CRE gateway. Stub `handler` (non-TEE) = Chainlink miss. Workflow **binary is not confidential**. `usingTheDons().report()` crosses only hashes + stamp.
 
 ```bash
 cd cre/hop-query && bun install && cd ..
-cp .env.example .env   # CRE_ETH_PRIVATE_KEY + HOP_POLICY_TABLE_JSON
-cre workflow simulate hop-query --target staging-settings
+cp .env.example .env   # CRE_ETH_PRIVATE_KEY + HOP_POLICY_TABLE_JSON + GRAPH_API_KEY
+cre workflow simulate hop-query --target staging-settings --non-interactive --trigger-index 0 --http-payload @hop-query/http-payload.json
 ```
-
-CLI simulation qualifies for this event. Deploy to DON is invite-only. Stub `handler` (non-TEE) = Chainlink miss. Workflow **binary is not confidential**.
 
 ## Setup (owner)
 
@@ -104,10 +104,34 @@ npm run dev:web
 
 Workbench: http://localhost:5173 · API: http://localhost:8787
 
-## Out of scope (this repo)
+## Live testnet example
 
-Combo desk, Arduino, Shopify/Zapier marketplace, custom lending pool, Arc/Privy/Ledger as prize slots, Graph Base USDC 402, WALL/ATS until one paid query works.
+Paid `policy_check` (Hedera testnet, Blocky402 settle):
 
-## Attribution
+https://hashscan.io/testnet/transaction/0.0.7162784-1789187260-227607013
 
-Built with AI assistance in Cursor for ETHOnline 2026.
+Payer `0.0.10490510`. CRE is `handlerInTee` HTTP + Nitro; CLI sim until `CRE_WORKFLOW_ID` is set. Graph deployments and block are on the evidence pack. HCS anchors hashes when operator keys are set.
+
+## World ID
+
+Optional unique-human gate (not KYC). `POST /v1/world/rp-context` then IDKit, `POST /v1/world/verify` (World `/api/v4/verify/{rp_id}`), `X-Hop-World` on the paid hop. Evidence stores SHA-256 of the nullifier only. `WORLD_REQUIRED=1` to require it.
+
+## Mandate (agents)
+
+Deterministic. The model does not authorize pay.
+
+- Header `X-Hop-Mandate` (JSON or base64) or server default `HOP_MANDATE_JSON`
+- Checks: expiry, merchant `payTo`, query allowlist, freshness cap, per-call, budget, velocity
+- `human_threshold_tinybars` → HTTP 403 `mandate_review` until `X-Hop-Confirm: 1`
+- Over budget / expired → 403, **no settle**
+
+MCP: `hop_query`, `hop_evidence`, `hop_peac`, `hop_verify`, `hop_mandate`, `hop_meta`.
+
+## Receipts
+
+- `GET /v1/evidence/{id}` — hashes, settlement, chain, mandate hash
+- `GET /v1/evidence/{id}/peac` — PEAC-shaped portable receipt
+- `GET /v1/evidence/{id}/verify` — recompute aggregate hash
+- HCS: set `HOP_HCS_AUTO=1` (or `HEDERA_HCS_TOPIC`) plus operator keys
+
+Posture labels: non-custodial · OFAC not screened · testnet payee. Not MSB/CASP/RIA. WALL ATS is simulated.

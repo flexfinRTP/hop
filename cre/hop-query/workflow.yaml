@@ -4,7 +4,7 @@ staging-settings:
     deployment-registry: "private"
   workflow-artifacts:
     workflow-path: "./main.ts"
-    config-path: "./config.staging.json"
+    config-path: "./config.runtime.json"
     secrets-path: "../secrets.yaml"
 
 production-settings:

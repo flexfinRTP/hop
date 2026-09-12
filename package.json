@@ -5,11 +5,16 @@
   "workspaces": [
     "packages/shared",
     "apps/api",
-    "apps/web"
+    "apps/web",
+    "apps/mcp"
   ],
   "scripts": {
+    "setup:local": "node scripts/bootstrap-local.mjs",
+    "setup:accounts": "node scripts/resolve-hedera-accounts.mjs",
+    "setup:check": "node scripts/check-ready.mjs",
     "dev:api": "npm run dev -w @hop/api",
-    "dev:web": "npm run dev -w @hop/web"
+    "dev:web": "npm run dev -w @hop/web",
+    "mcp": "npm start -w @hop/mcp"
   },
   "engines": {
     "node": ">=20"
