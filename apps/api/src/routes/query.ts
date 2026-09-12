@@ -19,7 +19,7 @@ import {
 import { loadConfig, queryParams, quoteAmount, requirements } from "../config.js";
 import { cachedPublicUtil } from "../graph.js";
 import { submitReceiptHash } from "../hcs.js";
-import { runJoin } from "../join-run.js";
+import { checkCreCli, runJoin } from "../join-run.js";
 import { allowPayer, rateOk } from "../rate-limit.js";
 import {
   currentChain,
@@ -70,6 +70,21 @@ function parseRequest(body: unknown): QueryRequest | { error: string } {
   return req;
 }
 
+function validProtocolSelection(
+  cfg: ReturnType<typeof loadConfig>,
+  requested: string[],
+): boolean {
+  const resolved = requested.map((value) =>
+    cfg.protocols.find((protocol) => protocol.key === value || protocol.slug === value),
+  );
+  const keys = resolved.map((protocol) => protocol?.key).filter((key): key is string => Boolean(key));
+  return (
+    resolved.every((protocol) => Boolean(protocol?.url)) &&
+    keys.length === requested.length &&
+    new Set(keys).size === requested.length
+  );
+}
+
 function resolveMandate(
   c: { req: { header: (name: string) => string | undefined } },
   fallback: string,
@@ -96,6 +111,29 @@ query.post("/", async (c) => {
   const parsed = parseRequest(bodyUnknown);
   if ("error" in parsed) {
     return c.json({ error: parsed.error }, 400);
+  }
+  if (!validProtocolSelection(cfg, parsed.protocols)) {
+    return c.json(
+      {
+        error: "bad_protocols",
+        detail: "Choose one or two configured protocol keys or slugs from GET /v1/meta.",
+      },
+      400,
+    );
+  }
+  if (cfg.hopJoin === "cre") {
+    const creCli = await checkCreCli(cfg);
+    if (!creCli.ok) {
+      emit(traceId, "cre", `CRE CLI unavailable: ${creCli.detail}`);
+      return c.json(
+        {
+          error: "cre_unavailable",
+          detail: "The CRE CLI is not available to the API process.",
+          trace: getTrace(traceId),
+        },
+        503,
+      );
+    }
   }
 
   const publicUtil = cachedPublicUtil(parsed);

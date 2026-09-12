@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { LABELS, MESSARI_SCHEMA, POSTURE, QUERY_TYPES, parseMandate } from "@hop/shared";
 import { loadConfig } from "../config.js";
 import { hcsReady } from "../hcs.js";
+import { checkCreCli } from "../join-run.js";
 import { getSpend, hopsInWindow } from "../store.js";
 import { worldReady } from "../world.js";
 
@@ -13,6 +14,7 @@ meta.get("/", async (c) => {
   const now = Date.now();
   const spend = template ? getSpend(template.id) : undefined;
   const hcs = await hcsReady(cfg);
+  const creCli = await checkCreCli(cfg);
   return c.json({
     product: "HOP",
     labels: LABELS,
@@ -43,6 +45,7 @@ meta.get("/", async (c) => {
       tee: "nitro:us-west-2",
       trigger: "http",
       workflow_id: cfg.creWorkflowId || null,
+      cli_ready: creCli.ok,
     },
     mandate_required: cfg.mandateRequired,
     mandate: template

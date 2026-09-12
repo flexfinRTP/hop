@@ -1,6 +1,6 @@
 # Hop
 
-Confidential lending-risk query. HTTP 402 + OpenAPI. Fixed query types only.
+Confidential lending-risk query. HTTP 402 + OpenAPI. Fixed query types and explicitly selected data sources.
 
 ## Spec
 
@@ -10,6 +10,7 @@ Confidential lending-risk query. HTTP 402 + OpenAPI. Fixed query types only.
 ## Routes
 
 - POST /v1/query — Hedera exact x402 (Blocky402). Header Idempotency-Key required on paid retry. Optional X-Hop-Mandate, X-Hop-Confirm, X-Hop-World.
+- If CRE mode is enabled but the configured CRE CLI is unavailable, POST /v1/query returns `503 cre_unavailable` before payment.
 - GET /v1/evidence/{id} — public evidence (hashes). No Account.id. No policy caps.
 - GET /v1/evidence/{id}/peac — PEAC-shaped receipt
 - GET /v1/evidence/{id}/verify — recompute aggregate hash
@@ -37,3 +38,8 @@ Deterministic budget/velocity/expiry. LLM never pays. 403 mandate_* is not charg
 ## Query types
 
 market_params | position_counts | liquidations | policy_check | account_ltv
+
+Hop is a deterministic paid query service, not an LLM or agent orchestrator. The caller's agent
+maps the user's natural-language request to one supported query type, chooses one or two
+configured protocol keys from `/v1/meta`, handles the Hedera x402 payment, and sends the retry.
+Free text is not interpreted by Hop and never selects a hidden data source.

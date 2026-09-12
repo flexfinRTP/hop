@@ -1,6 +1,9 @@
 {
-  "query": "policy_check",
-  "protocols": ["aave-v3", "compound-v3"],
+  "query": "account_ltv",
+  "protocols": [
+    "aave-v3",
+    "compound-v3"
+  ],
   "max_block_lag": 50,
   "chain_rpc_url": "https://ethereum-rpc.publicnode.com",
   "graph": {
@@ -9,12 +12,12 @@
       {
         "slug": "aave-v3-ethereum",
         "id": "JCNWRypm7FYwV8fx5HhzZPSFaMxgkPuw4TnR3Gpi81zk",
-        "url": ""
+        "url": "https://gateway.thegraph.com/api/subgraphs/id/JCNWRypm7FYwV8fx5HhzZPSFaMxgkPuw4TnR3Gpi81zk"
       },
       {
         "slug": "compound-v3-ethereum",
         "id": "AwoxEZbiWLvv6e3QdvdMZw4WDURdGbvPfHmZRc8Dpfz9",
-        "url": ""
+        "url": "https://gateway.thegraph.com/api/subgraphs/id/AwoxEZbiWLvv6e3QdvdMZw4WDURdGbvPfHmZRc8Dpfz9"
       }
     ]
   }

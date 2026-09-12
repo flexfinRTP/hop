@@ -5,14 +5,14 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 const API = (process.env.HOP_API_URL ?? "http://localhost:8787").replace(/\/$/, "");
 const MANDATE = (process.env.HOP_MANDATE_JSON ?? "").trim();
 
-const server = new Server({ name: "hop", version: "0.0.36" }, { capabilities: { tools: {} } });
+const server = new Server({ name: "hop", version: "0.0.55" }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: "hop_query",
       description:
-        "Paid Hop lending-risk query. Call without payment_b64 to receive 402 PaymentRequirements. Retry with payment_b64 (Hedera exact / Blocky402) and idempotency_key. Optional mandate_json (deterministic budget; LLM never pays). confirm=true after mandate_review. Optional world_token from POST /v1/world/verify. Fixed query types only. No wallet lists. Policy caps never returned.",
+        "Paid Hop lending-risk query. The calling agent must map natural language to one fixed query type and explicitly choose one or two configured protocol keys from hop_meta; Hop does not parse free text or choose sources. Call without payment_b64 to receive 402 PaymentRequirements. Retry with payment_b64 (Hedera exact / Blocky402) and idempotency_key. Optional mandate_json (deterministic budget; LLM never pays). confirm=true after mandate_review. Optional world_token from POST /v1/world/verify. No wallet lists. Policy caps never returned.",
       inputSchema: {
         type: "object",
         required: ["query", "protocols", "max_block_lag"],

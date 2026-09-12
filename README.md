@@ -83,6 +83,14 @@ Two live Messari Lending/CDP **3.1.0** subgraphs (intended: Aave v3 + Compound v
 
 Default `HOP_JOIN=cre`: paid hop runs `cre workflow simulate hop-query --non-interactive --trigger-index 0 --http-payload ...` (WASM `handlerInTee`, live Graph/RPC). No inline fallback on that path. Set `HOP_JOIN=inline` only for local join without the CRE CLI.
 
+Hop does not contain an LLM or orchestrator. The user's agent maps a natural-language request to
+one supported query type, chooses configured protocol sources from `/v1/meta`, handles the Hedera
+x402 payment, and calls this API. The API rejects unconfigured sources before payment.
+
+The API preflights the CRE CLI before returning a payment quote. Set `CRE_CLI` to `cre` when it
+is on `PATH`, or to the absolute path of `cre.exe` on Windows. If it is unavailable, the API
+returns `503 cre_unavailable` before any Hedera payment can settle.
+
 CLI simulation is the ETHOnline-qualified TEE path and makes live HTTP calls. Live DON: set `CRE_WORKFLOW_ID` (invite) to also POST `workflows.execute` to the CRE gateway. Stub `handler` (non-TEE) = Chainlink miss. Workflow **binary is not confidential**. `usingTheDons().report()` crosses only hashes + stamp.
 
 ```bash

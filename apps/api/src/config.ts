@@ -27,6 +27,7 @@ export type AppConfig = {
   rateLimitPerMin: number;
   hopJoin: "inline" | "cre";
   creCwd: string;
+  creCli: string;
   creEthPrivateKey: string;
   creWorkflowId: string;
   creGatewayUrl: string;
@@ -93,6 +94,7 @@ export function loadConfig(): AppConfig {
     rateLimitPerMin: Number(process.env.QUERY_RATE_LIMIT_PER_MIN ?? 6),
     hopJoin: req("HOP_JOIN") === "inline" ? "inline" : "cre",
     creCwd: req("CRE_CWD") || path.resolve(here, "../../../cre"),
+    creCli: req("CRE_CLI") || "cre",
     creEthPrivateKey: req("CRE_ETH_PRIVATE_KEY"),
     creWorkflowId: req("CRE_WORKFLOW_ID"),
     creGatewayUrl: req("CRE_GATEWAY_URL"),

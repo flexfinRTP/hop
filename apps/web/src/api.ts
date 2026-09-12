@@ -38,7 +38,13 @@ export type Meta = {
   mandate_required?: boolean;
   hcs?: { ready: boolean; topic: string | null; auto: boolean };
   hop_join?: string;
-  cre?: { join: string; tee: string; trigger: string; workflow_id: string | null };
+  cre?: {
+    join: string;
+    tee: string;
+    trigger: string;
+    workflow_id: string | null;
+    cli_ready?: boolean;
+  };
   world?: {
     ready: boolean;
     required: boolean;

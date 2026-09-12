@@ -39,6 +39,49 @@ function creConfig(cfg: AppConfig, request: QueryRequest) {
   };
 }
 
+export async function checkCreCli(
+  cfg: AppConfig,
+): Promise<{ ok: true } | { ok: false; detail: string }> {
+  if (cfg.hopJoin !== "cre") return { ok: true };
+  return new Promise((resolve) => {
+    let settled = false;
+    let output = "";
+    const finish = (result: { ok: true } | { ok: false; detail: string }) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+    const child = spawn(cfg.creCli, ["version"], {
+      cwd: cfg.creCwd,
+      shell: false,
+      windowsHide: true,
+      env: process.env,
+    });
+    const timer = setTimeout(() => {
+      child.kill();
+      finish({ ok: false, detail: "cre_cli_timeout" });
+    }, 10_000);
+    child.stdout?.on("data", (data) => {
+      output += String(data);
+    });
+    child.stderr?.on("data", (data) => {
+      output += String(data);
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      finish({ ok: false, detail: error.message || "cre_cli_unavailable" });
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) {
+        finish({ ok: true });
+      } else {
+        finish({ ok: false, detail: output.trim().slice(-240) || `cre_cli_exit_${code}` });
+      }
+    });
+  });
+}
+
 export async function runJoin(
   cfg: AppConfig,
   request: QueryRequest,
@@ -131,12 +174,12 @@ async function simulateCre(
     "--env",
     envFile,
   ];
-  onTrace("cre", `cre ${args.join(" ")}`);
+  onTrace("cre", `${cfg.creCli} ${args.join(" ")}`);
 
   const stdout = await new Promise<string>((resolve, reject) => {
-    const child = spawn("cre", args, {
+    const child = spawn(cfg.creCli, args, {
       cwd: cfg.creCwd,
-      shell: true,
+      shell: false,
       env: {
         ...process.env,
         HOP_POLICY_TABLE_JSON: cfg.policyJson,

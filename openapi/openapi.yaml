@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Hop
-  description: Confidential lending-risk query. Hedera exact x402 (Blocky402). Aggregates only.
-  version: 0.0.36
+  description: Confidential lending-risk query. Hedera exact x402 (Blocky402). Fixed query types and explicitly selected configured data sources; Hop does not parse natural-language prompts.
+  version: 0.0.55
 servers:
   - url: http://localhost:8787
 paths:
@@ -61,7 +61,7 @@ paths:
         "429":
           description: rate_limited — not charged
         "503":
-          description: policy_unavailable | graph_unconfigured | facilitator_unavailable | merchant_unconfigured — not charged
+          description: policy_unavailable | graph_unconfigured | cre_unavailable | facilitator_unavailable | merchant_unconfigured — not charged
           content:
             application/json:
               schema:
@@ -209,6 +209,7 @@ components:
           $ref: "#/components/schemas/QueryType"
         protocols:
           type: array
+          description: One or two configured protocol keys or slugs from GET /v1/meta. The caller agent chooses these sources.
           items:
             type: string
           minItems: 1

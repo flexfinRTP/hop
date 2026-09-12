@@ -8,6 +8,12 @@ Code complete through **0.0.17**. Phase D (0.0.18) is the remaining path: prize 
 
 Local test bootstrap is **0.0.19** (`npm run setup:local`). Still needs you: Hedera faucet + Graph Studio API key.
 
+## 0.0.55
+
+### Changed
+
+- `/`: slightly reduced the marketing hero title size on desktop and mobile.
+
 ### Done (MVP engine + desk)
 
 - [x] 0.0.9 Schema-true Messari join (five query types, k-anon bins, caps hashed)
@@ -36,6 +42,26 @@ Local test bootstrap is **0.0.19** (`npm run setup:local`). Still needs you: Hed
 - [x] 0.0.35 Mandate + PEAC + HCS auto + metered 402 + evidence chain + MCP agents + posture labels
 - [x] 0.0.36 CRE HTTP `handlerInTee` + Nitro + DON report hashes; egress allowlist; live HCS commitments; World ID 4.0 uniqueness; no CRE→inline fallback
 - [x] 0.0.37 `/app` + desk: flow line above the ask box; info icons on check, chips, rails, stamp, evidence
+- [x] 0.0.38 `/`: tell your agent → llms.txt + OpenAPI/Swagger + SKILL + README
+- [x] 0.0.39 `/`: buyer-first marketing narrative, animated desk visual, use cases, judge proof rails
+- [x] 0.0.40 `/`: colorful Hop mascot hero and three additional plain-English prompt cards
+- [x] 0.0.41 `/`: replace toy mascot with angular screen-printed AI-agent infrastructure mascot
+- [x] 0.0.42 `/`: replace animal mascot direction with an abstract hopping agent-router machine
+- [x] 0.0.43 `/`: replace extra prompt patterns with manufacturing, agriculture, and logistics
+- [x] 0.0.44 `/` + `/app`: approved tagline and paid/private/verifiable positioning
+- [x] 0.0.45 `/app`: plain-language controls, friendly statuses, lighter help tips, cleaner labels
+- [x] 0.0.46 `/`: original hand-drawn HOP bunny mascot replaces the agent-router hero art
+- [x] 0.0.47 `/`: simplify bunny art to plain scarf and clean motion strokes
+- [x] 0.0.48 `/app`: question-first layout, visible payment step, large answer state, collapsed activity/receipt
+- [x] 0.0.49 `/app`: calmer product UI, click-only help, fewer icons, readable activity/receipt labels, and clearer typography
+- [x] 0.0.50 `/app`: preserve Activity as the raw technical trace with original rails and log messages
+- [x] 0.0.51 `/app`: replace the prompt selector with question cards and give decisions a dedicated output display
+- [x] 0.0.52 `/app`: add live source refresh/status, clearer loading and failure states, and cleaner receipt/settings actions
+- [x] 0.0.53 `/app`: expand technical Activity during checks, collapse it on completion, and open Receipt for completed results
+- [x] 0.0.54 `/app`: add live runtime timing and a four-stage ASK/PAY/CHECK/PROVE progress meter
+- [x] 0.0.55 `/app` + API + agent docs: expose supported check/source selection, reject unconfigured sources before payment, and document that Hop does not parse free text
+- [x] 0.0.56 API + `/app`: configure CRE CLI paths, preflight CRE before payment, expose runner readiness, and return `503 cre_unavailable` instead of charging for stale output
+- [x] 0.0.57 Local setup: install official CRE CLI v1.33.0, add its user PATH entry, and configure the API with its absolute Windows executable path
 
 ### Phase D — Chainlink Best Confidential Workflow (Classic; $2k / 2×$1k)
 
@@ -75,6 +101,84 @@ Qualify: `handlerInTee` HTTP + `POLICY_TABLE` in TEE + live Graph join + `usingT
 - [ ] WALL only with a regulated execute partner
 
 Owner go: `npm install`, fill `.env`, `npm run dev:api`, `npm run dev:web`. Do not start REPO/POOL/ATS/Arduino/combo desk.
+
+## 0.0.48
+
+### Changed
+
+- `/app` now prioritizes the question and answer, with a clear run/approve payment action.
+- Activity and Receipt stay compact until needed; the Activity panel no longer consumes the empty half of the screen by default.
+- Added plain-language idle/checking states, payment explanation, and a readable progress path.
+- Kept advanced agent settings and detailed traces available without putting them in the primary workflow.
+
+## 0.0.47
+
+### Changed
+
+- Removed circuit lines, network nodes, and technical patterns from the bunny art. The hero now uses a clean hand-drawn bunny with a plain red scarf, amber button, and simple motion strokes.
+
+## 0.0.46
+
+### Changed
+
+- Replaced the abstract machine hero with an original hand-drawn storybook HOP bunny featuring a red signal scarf, teal data details, and animated movement.
+
+## 0.0.45
+
+### Changed
+
+- `/app` default view now uses Question, Answer, Settings, Activity, Receipt, Run check, and Payment record.
+- Replaced raw status codes and developer labels with plain-language messages.
+- Shortened info tips and changed app tooltips from black panels to light, readable cards.
+- Kept technical controls available under Settings while reducing default-screen noise.
+
+## 0.0.44
+
+### Added
+
+- Marketing hero tagline: `Private rules. Clear decisions. Built for agents.`
+- Marketing and app positioning line: `Paid, private, verifiable agent decisions.`
+
+## 0.0.43
+
+### Changed
+
+- Replaced the finance/software-adjacent prompt examples with physical-world industries: manufacturing defects, agricultural irrigation, and shipment delivery windows.
+
+## 0.0.42
+
+### Changed
+
+- Replaced the animal mascot direction with a non-animal agent-router machine: modular server body, spring-loaded hop motion, antenna, ports, routing arrows, and HOP infrastructure palette.
+
+## 0.0.41
+
+### Changed
+
+- Replaced the generic 3D bunny with an angular editorial/screen-print mascot: a rabbit-shaped agent router with data-rail ears, routing blocks, and HOP infrastructure labeling.
+- Updated the hero status badge from a policy result to `HOP / AGENT INFRA` and `ROUTE READY`.
+
+## 0.0.40
+
+### Added
+
+- Replaced the desk preview hero with a generated Hop mascot: expressive bunny, oversized signal ears, branded red/teal/amber palette, and animated status badge.
+- Added Treasury, Credit, and Operations prompt cards with simple business language.
+- Marked extra prompts as patterns and kept the current Graph lending demo boundary explicit.
+
+## 0.0.39
+
+### Added
+
+- Rebuilt the marketing page around clear business outcomes: private rule, paid check, clear stamp, verifiable receipt.
+- Added a responsive hero visual using the existing night-desk artwork, with a CSS-animated Hop check screen, scan line, live indicator, and signal beacons.
+- Added judge-facing proof sections for The Graph, Chainlink CRE, Hedera x402, World ID, mandate, PEAC, and agent docs.
+
+## 0.0.38
+
+### Added
+
+- `/` Tell your agent: llms.txt, OpenAPI, Swagger editor, SKILL, README. Same-origin files for agent fetch. Mandate / PEAC / posture stay under that block.
 
 ## 0.0.37
 

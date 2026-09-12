@@ -5,6 +5,7 @@ import {
   INDUSTRY_CHIPS,
   LABELS,
   QUERY_TYPES,
+  STATUS_LABEL,
   STATUS_HELP,
   wallFromAggregate,
   type QueryType,
@@ -18,6 +19,7 @@ type UiStatus =
   | "unpaid"
   | "policy_unavailable"
   | "graph_unconfigured"
+  | "cre_unavailable"
   | "facilitator_unavailable"
   | "merchant_unconfigured"
   | "mandate_review"
@@ -29,6 +31,7 @@ type UiStatus =
   | "k_anon_denied"
   | "success"
   | "reject"
+  | "error"
   | "pending";
 
 const CHIPS: {
@@ -39,6 +42,8 @@ const CHIPS: {
   clear: string;
   query: QueryType;
 }[] = INDUSTRY_CHIPS.map((c) => ({ ...c, query: "policy_check" as const }));
+
+const RUN_STEPS = ["ask", "pay", "check", "prove"] as const;
 
 function newTraceId(): string {
   return crypto.randomUUID();
@@ -108,6 +113,14 @@ function shortT(t: string): string {
   return d.toISOString().slice(11, 23);
 }
 
+function formatRuntime(milliseconds: number): string {
+  if (!milliseconds) return "—";
+  const seconds = milliseconds / 1000;
+  if (seconds < 60) return `${seconds.toFixed(2)}s`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}m ${(seconds % 60).toFixed(0).padStart(2, "0")}s`;
+}
+
 function receiptRows(raw: string): { k: string; v: string }[] {
   const text = receiptText(raw);
   if (text === "—") return [];
@@ -169,6 +182,53 @@ function chipHelp(id: string): string {
   return HELP.ask;
 }
 
+function sourceLabel(protocols: string[]): string {
+  return (
+    protocols
+      .map((protocol) => protocol.replace(/-v3$/, " v3").replaceAll("-", " "))
+      .join(" + ") || "—"
+  );
+}
+
+function railLabel(rail: string): string {
+  return (
+    {
+      graph: "data",
+      hedera: "payment",
+      cre: "private",
+      world: "human",
+      hop: "hop",
+    }[rail] ?? rail
+  );
+}
+
+function receiptLabel(key: string): string {
+  return (
+    {
+      id: "Receipt ID",
+      stamp: "Decision",
+      settlement: "Payment",
+      policy: "Private policy proof",
+      aggregate: "Result proof",
+      hcs: "Hedera anchor",
+      mandate: "Agent budget",
+      chain: "Receipt chain",
+      freshness: "Data freshness",
+      cre: "Private workflow",
+      cre_report: "Workflow proof",
+      world: "Human proof",
+    }[key] ?? key.replaceAll("_", " ")
+  );
+}
+
+const QUERY_LABELS: Record<QueryType, string> = {
+  market_params: "Market settings",
+  position_counts: "Position count",
+  liquidations: "Liquidation count",
+  policy_check: "Private limit check",
+  account_ltv: "Account loan-to-value",
+};
+
 export function Workbench({
   variant,
   onPending,
@@ -183,9 +243,9 @@ export function Workbench({
   const [ask, setAsk] = useState(CHIPS[0].ask);
   const [status, setStatus] = useState<UiStatus>("idle");
   const [pending, setPending] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(variant === "app");
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [agentOpen, setAgentOpen] = useState(false);
-  const [traceOpen, setTraceOpen] = useState(true);
+  const [traceOpen, setTraceOpen] = useState(variant === "desk");
   const [wallOpen, setWallOpen] = useState(false);
   const [muteTts, setMuteTts] = useState(true);
   const [confirmPay, setConfirmPay] = useState(false);
@@ -200,12 +260,23 @@ export function Workbench({
   const [settlement, setSettlement] = useState("");
   const [evidenceId, setEvidenceId] = useState("");
   const [meta, setMeta] = useState<Meta | null>(null);
+  const [metaStatus, setMetaStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
+  const [runtimeMs, setRuntimeMs] = useState(0);
   const recRef = useRef<SpeechRecognition | null>(null);
   const closeTrace = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     onPending?.(pending);
   }, [pending, onPending]);
+
+  useEffect(() => {
+    if (runStartedAt === null) return;
+    const timer = window.setInterval(() => {
+      setRuntimeMs(Date.now() - runStartedAt);
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [runStartedAt]);
 
   const body: QueryBody = useMemo(
     () => ({
@@ -216,15 +287,36 @@ export function Workbench({
     [query, protocols, maxBlockLag],
   );
 
+  async function refreshMeta() {
+    setMetaStatus("loading");
+    try {
+      const m = await getMeta();
+      if (!m || !Array.isArray(m.protocols)) throw new Error("meta_shape");
+      setMeta(m);
+      const keys = m.protocols
+        .filter((protocol) => protocol.configured)
+        .map((protocol) => protocol.key)
+        .join(",");
+      setProtocols(keys);
+      setMetaStatus("ready");
+    } catch {
+      setMetaStatus("error");
+    }
+  }
+
+  function toggleProtocol(key: string) {
+    const selected = protocols.split(",").map((value) => value.trim()).filter(Boolean);
+    if (selected.includes(key)) {
+      if (selected.length === 1) return;
+      setProtocols(selected.filter((value) => value !== key).join(","));
+      return;
+    }
+    if (selected.length >= 2) return;
+    setProtocols([...selected, key].join(","));
+  }
+
   useEffect(() => {
-    void getMeta()
-      .then((m) => {
-        if (!m || !Array.isArray(m.protocols)) return;
-        setMeta(m);
-        const keys = m.protocols.map((p) => p.key).join(",");
-        if (keys) setProtocols(keys);
-      })
-      .catch(() => undefined);
+    void refreshMeta();
   }, []);
 
   useEffect(() => {
@@ -273,6 +365,7 @@ export function Workbench({
     if (http === 403 && json.error === "world_required") return "world_required";
     if (http === 403) return "mandate_denied";
     if (http === 503 && json.error === "graph_unconfigured") return "graph_unconfigured";
+    if (http === 503 && json.error === "cre_unavailable") return "cre_unavailable";
     if (http === 503 && json.error === "facilitator_unavailable") return "facilitator_unavailable";
     if (http === 503 && json.error === "merchant_unconfigured") return "merchant_unconfigured";
     if (http === 503 && json.error === "policy_unavailable") return "policy_unavailable";
@@ -300,6 +393,11 @@ export function Workbench({
   async function runHop() {
     setPending(true);
     setStatus("pending");
+    setTraceOpen(true);
+    setDrawerOpen(false);
+    const startedAt = Date.now();
+    setRunStartedAt(startedAt);
+    setRuntimeMs(0);
     setTrace([]);
     setEvidenceJson("");
     setSettlement("");
@@ -307,6 +405,8 @@ export function Workbench({
     setAggregate(undefined);
     const traceId = newTraceId();
     const idem = crypto.randomUUID();
+    let keepActivityOpen = false;
+    let openReceipt = false;
     closeTrace.current?.();
     closeTrace.current = openTrace(traceId, pushTrace);
       const mandate =
@@ -322,6 +422,7 @@ export function Workbench({
         setStatus(mapStatus(first.status, first.json));
         if (first.json.evidence && !isInvoice(first.json.evidence) && !isInvoice(first.json)) {
           setEvidenceJson(JSON.stringify(first.json.evidence, null, 2));
+          openReceipt = true;
         }
         return;
       }
@@ -333,6 +434,7 @@ export function Workbench({
       if (!confirmPay && needHitl) {
         setConfirmPay(true);
         setStatus("mandate_review");
+        keepActivityOpen = true;
         return;
       }
       const accepts = first.json.accepts as unknown[] | undefined;
@@ -362,6 +464,7 @@ export function Workbench({
       setStatus(st);
       if (st === "mandate_review") {
         setConfirmPay(true);
+        keepActivityOpen = true;
         return;
       }
       if (paid.json.aggregate && typeof paid.json.aggregate === "object") {
@@ -385,21 +488,30 @@ export function Workbench({
       }
       if (paid.status === 200) {
         setPaidOnce(true);
-        setDrawerOpen(true);
+        openReceipt = true;
         setConfirmPay(false);
         speak(st, paid.json.aggregate as Record<string, unknown> | undefined);
       }
     } catch (err) {
-      setStatus("unpaid");
+      setStatus("error");
       pushTrace({ t: new Date().toISOString(), rail: "hop", msg: String(err) });
     } finally {
       setPending(false);
+      closeTrace.current?.();
+      closeTrace.current = null;
+      if (!keepActivityOpen) {
+        setRuntimeMs(Date.now() - startedAt);
+        setRunStartedAt(null);
+        setTraceOpen(false);
+        setDrawerOpen(openReceipt);
+      }
     }
   }
 
   function speak(st: UiStatus, agg: Record<string, unknown> | undefined) {
     if (muteTts) return;
-    const text = stampLabel(chip, agg?.breached === true);
+    const text =
+      query === "policy_check" ? stampLabel(chip, agg?.breached === true) : QUERY_LABELS[query];
     window.speechSynthesis?.cancel();
     window.speechSynthesis?.speak(new SpeechSynthesisUtterance(`${st} ${text}`));
   }
@@ -407,36 +519,114 @@ export function Workbench({
   const wall = wallFromAggregate(aggregate, meta?.wall_buffer ?? 0.2);
   const breached = aggregate?.breached === true;
   const stamped = status === "success" || status === "reject";
-  const stamp = stamped ? stampLabel(chip, breached) : "—";
+  const resultStamp =
+    query === "policy_check" ? stampLabel(chip, breached) : status === "reject" ? "REJECTED" : "ACCEPTED";
+  const stamp = stamped ? resultStamp : "—";
+  const answerDisplay = stamped
+    ? stamp
+    : pending
+      ? "CHECKING"
+      : status === "error"
+        ? "TRY AGAIN"
+        : "READY";
+  const answerNote = stamped
+    ? query === "policy_check"
+      ? "Decision returned from the private check."
+      : `${QUERY_LABELS[query]} returned from the selected sources.`
+    : pending
+      ? "Reading the live data now."
+      : status === "error"
+        ? "Hop could not complete this check. Review Activity and try again."
+      : "Choose a question, then run the check.";
   const observed = typeof aggregate?.observed === "number" ? aggregate.observed : undefined;
   const activeChip = CHIPS.find((c) => c.id === chip) ?? CHIPS[0];
   const protocolList = body.protocols;
+  const protocolOptions = meta?.protocols?.length
+    ? meta.protocols.map((protocol) => ({
+        key: protocol.key,
+        label: sourceLabel([protocol.key]),
+        configured: protocol.configured,
+      }))
+    : protocolList.map((key) => ({ key, label: sourceLabel([key]), configured: true }));
   const evidenceLines = receiptRows(evidenceJson);
+  const sourceStatus =
+    metaStatus === "loading"
+      ? "Loading live sources"
+      : metaStatus === "error"
+        ? "Source status unavailable"
+        : meta?.graph_ready
+          ? "Live sources ready"
+          : "Live source needs setup";
+  const sourceStatusClass =
+    metaStatus === "error" ? "error" : meta?.graph_ready ? "ready" : "loading";
+  const joinStatus =
+    metaStatus === "loading"
+      ? "Checking CRE runner"
+      : metaStatus === "error"
+        ? "CRE status unavailable"
+      : meta?.hop_join === "inline"
+        ? "Inline join"
+        : meta?.cre?.cli_ready === false
+          ? "CRE runner unavailable"
+          : "CRE runner ready";
+  const joinStatusClass =
+    metaStatus === "loading"
+      ? "loading"
+      : meta?.hop_join === "inline" || meta?.cre?.cli_ready
+        ? "ready"
+        : "error";
+  const hasInvoice = trace.some((event) => event.rail === "hedera" && /invoice|verify|settle/i.test(event.msg));
+  const hasCheck = trace.some((event) => event.rail === "cre" || event.rail === "graph");
+  const hasProof =
+    Boolean(evidenceId) ||
+    trace.some((event) => /hcs|evidence|report/i.test(event.msg));
+  const progressIndex = hasProof ? 4 : hasCheck ? 3 : hasInvoice ? 2 : runStartedAt !== null ? 1 : 0;
+  const currentProgressIndex = progressIndex > 0 && progressIndex < 4 ? progressIndex - 1 : -1;
+  const progressLabel =
+    status === "error"
+      ? "Run stopped"
+      : progressIndex === 4
+        ? "Complete"
+        : progressIndex === 3
+          ? "Checking live data"
+          : progressIndex === 2
+            ? "Settling payment"
+            : progressIndex === 1
+              ? "Starting check"
+              : "Ready to run";
 
-  const flags = (
-    <nav className="rail" aria-label="rails">
-      <span className={rails.graph ? "on" : ""}>
-        <i />
-        Graph
-        <Info text={HELP.graph} />
-      </span>
-      <span className={rails.hedera ? "on" : ""}>
-        <i />
-        Hedera
-        <Info text={HELP.hedera} />
-      </span>
-      <span className={rails.cre ? "on" : ""}>
-        <i />
-        CRE
-        <Info text={HELP.cre} />
-      </span>
-      <span className={rails.world ? "on" : ""}>
-        <i />
-        World
-        <Info text={HELP.worldRail} place="end" />
-      </span>
-    </nav>
-  );
+  const flags =
+    variant === "app" ? (
+      <nav className="app-trust" aria-label="what powers this check">
+        <span className={rails.graph ? "on" : ""}>Market data</span>
+        <span className={rails.hedera ? "on" : ""}>Payment</span>
+        <span className={rails.cre ? "on" : ""}>Private check</span>
+        <span className={rails.world ? "on" : ""}>Human proof</span>
+      </nav>
+    ) : (
+      <nav className="rail" aria-label="rails">
+        <span className={rails.graph ? "on" : ""}>
+          <i />
+          Graph
+          <Info text={HELP.graph} />
+        </span>
+        <span className={rails.hedera ? "on" : ""}>
+          <i />
+          Hedera
+          <Info text={HELP.hedera} />
+        </span>
+        <span className={rails.cre ? "on" : ""}>
+          <i />
+          CRE
+          <Info text={HELP.cre} />
+        </span>
+        <span className={rails.world ? "on" : ""}>
+          <i />
+          World
+          <Info text={HELP.worldRail} place="end" />
+        </span>
+      </nav>
+    );
 
   const askBlock = (
     <section className="ask">
@@ -530,6 +720,7 @@ export function Workbench({
       status === "unpaid" ||
       status === "policy_unavailable" ||
       status === "graph_unconfigured" ||
+      status === "cre_unavailable" ||
       status === "facilitator_unavailable" ||
       status === "merchant_unconfigured" ||
       status === "mandate_review" ||
@@ -595,7 +786,7 @@ export function Workbench({
           >
             {QUERY_TYPES.map((t) => (
               <option key={t} value={t}>
-                {t}
+                {QUERY_LABELS[t]}
               </option>
             ))}
           </select>
@@ -747,37 +938,12 @@ export function Workbench({
               navigate("/");
             }}
           >
-            Hop
+            <span>Hop</span>
+            <small className="app-mark-tagline">
+              Private rules. Clear decisions. Built for agents.
+            </small>
           </a>
           {flags}
-          <ul className="app-facts">
-            <li>{meta?.labels?.cre ?? LABELS.cre}</li>
-            <li>{LABELS.demoGraph}</li>
-            {meta ? (
-              <li>
-                {meta.amount} · {meta.asset}
-                <Info text={HELP.amount} place="end" />
-              </li>
-            ) : null}
-            {meta ? <li>{meta.graph_ready ? "graph ready" : "graph off"}</li> : null}
-            {meta?.mandate ? (
-              <li>
-                mandate {meta.mandate.remaining_tinybars}/{meta.mandate.max_tinybars}
-                <Info text={HELP.mandate} place="end" />
-              </li>
-            ) : null}
-            {meta?.hcs?.ready ? (
-              <li>
-                HCS {meta.hcs.topic}
-                <Info text={HELP.hcs} place="end" />
-              </li>
-            ) : (
-              <li>HCS off</li>
-            )}
-            {meta?.cre ? <li>CRE {meta.cre.trigger} {meta.cre.tee}</li> : null}
-            {meta?.world?.ready ? <li>World ID</li> : null}
-            {meta?.posture ? <li>{meta.posture.custody}</li> : null}
-          </ul>
           <a
             className="app-link"
             href="/desk"
@@ -793,100 +959,208 @@ export function Workbench({
         <div className="app-work">
           <div className="app-col">
             <section className="app-card">
+              <p className="app-subline">Paid, private, verifiable agent decisions.</p>
               <div className="app-k-row">
-                <h2 className="app-k">ask</h2>
+                <h2 className="app-k">What should Hop check?</h2>
                 <Info text={HELP.ask} />
               </div>
-              <div className="app-seg">
+              <p className="app-helper">Start with a prompt, or ask in your own words.</p>
+              <div className="app-prompt-grid">
                 {CHIPS.map((c) => (
-                  <span key={c.id} className={`app-seg-item ${chip === c.id ? "on" : ""}`}>
-                    <button
-                      type="button"
-                      className={chip === c.id ? "on" : ""}
-                      onClick={() => {
-                        setChip(c.id);
-                        setQuery(c.query);
-                        setAsk(c.ask);
-                      }}
-                    >
-                      {c.label}
-                    </button>
-                    <Info text={chipHelp(c.id)} />
-                  </span>
+                  <button
+                    key={c.id}
+                    type="button"
+                    className={`app-prompt-choice ${chip === c.id ? "on" : ""}`}
+                    aria-pressed={chip === c.id}
+                    onClick={() => {
+                      setChip(c.id);
+                      setQuery(c.query);
+                      setAsk(c.ask);
+                    }}
+                  >
+                    <span className="app-prompt-title">{c.label}</span>
+                    <span className="app-prompt-copy">{c.ask}</span>
+                    <span className="app-prompt-arrow" aria-hidden="true">
+                      →
+                    </span>
+                  </button>
                 ))}
                 {paidOnce ? (
-                  <span className="app-seg-item">
-                    <button type="button" onClick={() => setWallOpen(true)}>
-                      WALL
-                    </button>
-                    <Info text={HELP.wall} />
-                  </span>
+                  <button
+                    type="button"
+                    className="app-prompt-choice app-prompt-secondary"
+                    onClick={() => setWallOpen(true)}
+                  >
+                    <span className="app-prompt-title">Cash buffer</span>
+                    <span className="app-prompt-copy">Check the operating buffer.</span>
+                    <span className="app-prompt-arrow" aria-hidden="true">
+                      →
+                    </span>
+                  </button>
                 ) : null}
               </div>
               <FlowLine />
+              <div className="app-input-label">
+                <span>Question wording</span>
+                <span>Optional · press Enter to run</span>
+              </div>
               <div className="app-ask-row">
+                <input
+                  value={ask}
+                  onChange={(e) => setAsk(e.target.value)}
+                  placeholder="Ask a plain-language question…"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && ask.trim()) void runHop();
+                  }}
+                  aria-label="question"
+                />
                 <span className="app-mic-wrap">
                   <button
                     type="button"
                     className="app-mic"
                     onClick={() => recRef.current?.start()}
-                    aria-label="mic"
+                    aria-label="speak question"
                   >
-                    mic
+                    Speak
                   </button>
-                  <Info text={HELP.mic} />
                 </span>
-                <input
-                  value={ask}
-                  onChange={(e) => setAsk(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") void runHop();
-                  }}
-                  aria-label="ask"
-                />
               </div>
-              <ul className="app-pills">
-                {protocolList.map((p) => (
-                  <li key={p}>{p}</li>
-                ))}
-                <li>{query}</li>
-                <li>lag {maxBlockLag}</li>
-                {meta?.mandate ? <li>agent {meta.mandate.agent_id}</li> : null}
-              </ul>
+              <div className="app-context">
+                <span className={`app-context-status ${sourceStatusClass}`}>{sourceStatus}</span>
+                <span className={`app-context-status ${joinStatusClass}`}>{joinStatus}</span>
+                <span>Sources: {sourceLabel(protocolList)}</span>
+                <span>Private limit protected</span>
+                <span>Freshness: {maxBlockLag} blocks</span>
+                <button
+                  type="button"
+                  className="app-refresh"
+                  onClick={() => void refreshMeta()}
+                  disabled={metaStatus === "loading"}
+                >
+                  {metaStatus === "loading" ? "Refreshing…" : "Refresh sources"}
+                </button>
+              </div>
+              <p className="app-input-note">
+                Supported checks only. Your wording is context; the selected check and sources run.
+              </p>
+              <div className="app-check-builder">
+                <div className="app-builder-field">
+                  <label htmlFor="check-type-main">Check type</label>
+                  <select
+                    id="check-type-main"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value as QueryType)}
+                  >
+                    {QUERY_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {QUERY_LABELS[type]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="app-builder-field">
+                  <span className="app-builder-label">Data sources</span>
+                  <div className="app-source-options">
+                    {protocolOptions.map((protocol) => {
+                      const selected = protocolList.includes(protocol.key);
+                      return (
+                        <button
+                          key={protocol.key}
+                          type="button"
+                          className={`app-source-option ${selected ? "on" : ""}`}
+                          aria-pressed={selected}
+                          disabled={!protocol.configured}
+                          onClick={() => toggleProtocol(protocol.key)}
+                        >
+                          {protocol.label}
+                          {!protocol.configured ? " unavailable" : ""}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             </section>
 
-            <section className="app-card app-result">
-              <div className="app-k-row">
-                <h2 className="app-k">stamp</h2>
-                <Info text={HELP.stamp} />
+            <section
+              className={`app-card app-result app-result-${stamped ? (breached ? "over" : "clear") : pending ? "pending" : status === "error" ? "error" : "ready"}`}
+            >
+              <div className="app-output-head">
+                <div>
+                  <p className="app-output-eyebrow">Hop decision</p>
+                  <h2 className="app-k">Your answer</h2>
+                </div>
+                <span
+                  className={`app-output-state ${stamped ? "verified" : pending ? "live" : confirmPay ? "payment" : status === "error" ? "error" : ""}`}
+                >
+                  {stamped
+                    ? "VERIFIED"
+                    : pending
+                      ? "LIVE CHECK"
+                      : confirmPay
+                        ? "PAYMENT READY"
+                        : status === "error"
+                          ? "CHECK FAILED"
+                          : "READY"}
+                </span>
               </div>
-              <p className="app-legend">
-                {activeChip.over} / {activeChip.clear}
-              </p>
-              <p className={`app-stamp ${stamped ? (breached ? "over" : "clear") : ""}`}>
-                {stamp}
-              </p>
+              <div
+                className={`app-run-meter ${status === "error" ? "error" : ""}`}
+                aria-label={`Run progress: ${progressLabel}. Runtime ${formatRuntime(runtimeMs)}`}
+              >
+                <div className="app-run-meter-meta">
+                  <span>{progressLabel}</span>
+                  <span>Runtime {formatRuntime(runtimeMs)}</span>
+                </div>
+                <div className="app-progress-bar" aria-hidden="true">
+                  {RUN_STEPS.map((step, index) => {
+                    const state =
+                      progressIndex === 4 || index < currentProgressIndex
+                        ? "done"
+                        : index === currentProgressIndex
+                          ? "current"
+                          : "";
+                    return <span key={step} className={state} />;
+                  })}
+                </div>
+                <div className="app-progress-labels" aria-hidden="true">
+                  {RUN_STEPS.map((step) => (
+                    <span key={step}>{step}</span>
+                  ))}
+                </div>
+              </div>
+              <div className="app-answer-box">
+                <p className="app-output-question">{ask}</p>
+                <p className="app-legend">
+                  {query === "policy_check" ? `${activeChip.over} / ${activeChip.clear}` : QUERY_LABELS[query]}
+                </p>
+                <p
+                  className={`app-stamp ${stamped ? (breached ? "over" : "clear") : pending ? "pending" : "ready"}`}
+                >
+                  {answerDisplay}
+                </p>
+                <p className="app-answer-note">{answerNote}</p>
+              </div>
               <div className="app-meta-row">
                 {stamped && observed !== undefined ? (
                   <span>
-                    observed {observed}
-                    <Info text={HELP.observed} />
+                    Public signal: {observed}
                   </span>
                 ) : (
-                  <span>{query}</span>
+                  <span>Private limit protected</span>
                 )}
                 {settlement ? (
                   <span>
                     <a href={hashscanTx(settlement)} target="_blank" rel="noreferrer">
-                      HashScan
+                      Payment record
                     </a>
-                    <Info text={HELP.hashscan} />
                   </span>
                 ) : null}
                 {status === "pending" ||
                 status === "unpaid" ||
                 status === "policy_unavailable" ||
                 status === "graph_unconfigured" ||
+                status === "cre_unavailable" ||
                 status === "facilitator_unavailable" ||
                 status === "merchant_unconfigured" ||
                 status === "mandate_review" ||
@@ -895,36 +1169,42 @@ export function Workbench({
                 status === "payer_denied" ||
                 status === "world_required" ||
                 status === "stale" ||
-                status === "k_anon_denied" ? (
+                status === "k_anon_denied" ||
+                status === "error" ? (
                   <span className="app-status">
-                    {status}
-                    {STATUS_HELP[status] ? <Info text={STATUS_HELP[status]} /> : null}
+                    {status === "error" ? "Try again" : STATUS_LABEL[status] ?? status}
                   </span>
                 ) : null}
               </div>
               {confirmPay ? (
-                <span className="app-go-wrap">
-                  <button type="button" className="app-go" onClick={() => void runHop()}>
-                    confirm pay
-                  </button>
-                  <Info text={HELP.confirm} place="up" />
-                </span>
+                <>
+                  <span className="app-go-wrap">
+                    <button type="button" className="app-go" onClick={() => void runHop()}>
+                      Approve payment
+                    </button>
+                    <Info text={HELP.confirm} place="up" />
+                  </span>
+                  <span className="app-payment-note">A small Hedera payment is ready.</span>
+                </>
               ) : (
-                <span className="app-go-wrap">
-                  <button
-                    type="button"
-                    className="app-go"
-                    disabled={pending}
-                    onClick={() => void runHop()}
-                  >
-                    check
-                  </button>
-                  <Info text={HELP.check} place="up" />
-                </span>
+                <>
+                  <span className="app-go-wrap">
+                    <button
+                      type="button"
+                      className="app-go"
+                      disabled={pending || !ask.trim()}
+                      onClick={() => void runHop()}
+                    >
+                      Run check
+                    </button>
+                    <Info text={HELP.check} place="up" />
+                  </span>
+                  <span className="app-payment-note">A small Hedera fee may be requested.</span>
+                </>
               )}
             </section>
 
-            <section className="app-card">
+            <section className="app-card app-settings">
               <div className="app-card-h">
                 <button
                   type="button"
@@ -932,10 +1212,12 @@ export function Workbench({
                   onClick={() => setAgentOpen((v) => !v)}
                   aria-expanded={agentOpen}
                 >
-                  agent
+                  Advanced settings
                 </button>
-                <Info text={HELP.agent} />
               </div>
+              {!agentOpen ? (
+                <p className="app-panel-summary">Optional controls for agents and integrations.</p>
+              ) : null}
               {agentOpen ? (
                 <div className="app-params">
                   <label className="app-check" htmlFor="mute-app">
@@ -945,12 +1227,12 @@ export function Workbench({
                       checked={muteTts}
                       onChange={(e) => setMuteTts(e.target.checked)}
                     />
-                    mute TTS
+                    Spoken result
                     <Info text={HELP.mute} />
                   </label>
                   <div className="app-field">
                     <label htmlFor="query-app">
-                      query
+                      Check type
                       <Info text={HELP.query} />
                     </label>
                     <select
@@ -960,14 +1242,14 @@ export function Workbench({
                     >
                       {QUERY_TYPES.map((t) => (
                         <option key={t} value={t}>
-                          {t}
+                {QUERY_LABELS[t]}
                         </option>
                       ))}
                     </select>
                   </div>
                   <div className="app-field">
                     <label htmlFor="protocols-app">
-                      protocols
+                      Data sources
                       <Info text={HELP.protocols} />
                     </label>
                     <input
@@ -978,7 +1260,7 @@ export function Workbench({
                   </div>
                   <div className="app-field">
                     <label htmlFor="lag-app">
-                      max_block_lag
+                      Data freshness
                       <Info text={HELP.lag} />
                     </label>
                     <input
@@ -991,7 +1273,7 @@ export function Workbench({
                   </div>
                   <div className="app-field app-field-wide">
                     <label htmlFor="xpay-app">
-                      X-PAYMENT
+                      Signed payment (advanced)
                       <Info text={HELP.xpay} />
                     </label>
                     <input
@@ -1021,7 +1303,9 @@ export function Workbench({
           </div>
 
           <div className="app-col app-col-log">
-            <section className={`app-card app-trace ${pending ? "live" : ""}`}>
+            <section
+              className={`app-card app-trace ${pending ? "live" : ""} ${traceOpen ? "open" : "closed"}`}
+            >
               <div className="app-card-h">
                 <button
                   type="button"
@@ -1029,10 +1313,18 @@ export function Workbench({
                   onClick={() => setTraceOpen((v) => !v)}
                   aria-expanded={traceOpen}
                 >
-                  trace
+                  Activity
                 </button>
-                <Info text={HELP.trace} place="end" />
               </div>
+              {!traceOpen ? (
+                <p className="app-panel-summary">
+                  {pending
+                    ? "Checking the live data…"
+                    : trace.length
+                      ? `${trace.length} steps recorded`
+                      : "Opens after you run a check"}
+                </p>
+              ) : null}
               {traceOpen ? (
                 <ol className="app-log">
                   {trace.length === 0 ? (
@@ -1051,77 +1343,78 @@ export function Workbench({
             </section>
 
             <section className="app-card">
-              <div className="app-card-h">
+              <div className="app-card-h app-receipt-head">
                 <button
                   type="button"
                   className="app-disclosure"
                   onClick={() => setDrawerOpen((o) => !o)}
                   aria-expanded={drawerOpen}
                 >
-                  Evidence
+                  Receipt
                 </button>
-                <Info text={HELP.evidence} />
-                <button
-                  type="button"
-                  className="app-ghost"
-                  onClick={() => {
-                    const blob = new Blob([evidenceJson], { type: "application/json" });
-                    const a = document.createElement("a");
-                    a.href = URL.createObjectURL(blob);
-                    a.download = "evidence.json";
-                    a.click();
-                  }}
-                >
-                  export JSON
-                </button>
-                <Info text={HELP.export} />
-                <button
-                  type="button"
-                  className="app-ghost"
-                  disabled={!evidenceId}
-                  onClick={() => {
-                    void (async () => {
-                      if (!evidenceId) return;
-                      const pack = await getPeac(evidenceId);
-                      const blob = new Blob([JSON.stringify(pack, null, 2)], {
-                        type: "application/json",
-                      });
-                      const a = document.createElement("a");
-                      a.href = URL.createObjectURL(blob);
-                      a.download = "peac.json";
-                      a.click();
-                    })();
-                  }}
-                >
-                  PEAC
-                </button>
-                <Info text={HELP.peac} />
-                <button
-                  type="button"
-                  className="app-ghost"
-                  disabled={!evidenceId}
-                  onClick={() => {
-                    void (async () => {
-                      if (!evidenceId) return;
-                      const pack = await getVerify(evidenceId);
-                      pushTrace({
-                        t: new Date().toISOString(),
-                        rail: "hop",
-                        msg: `verify ${JSON.stringify(pack)}`,
-                      });
-                    })();
-                  }}
-                >
-                  verify
-                </button>
-                <Info text={HELP.verify} place="end" />
+                {evidenceId ? (
+                  <div className="app-receipt-actions">
+                    <button
+                      type="button"
+                      className="app-ghost"
+                      onClick={() => {
+                        const blob = new Blob([evidenceJson], { type: "application/json" });
+                        const a = document.createElement("a");
+                        a.href = URL.createObjectURL(blob);
+                        a.download = "evidence.json";
+                        a.click();
+                      }}
+                    >
+                      Download receipt
+                    </button>
+                    <button
+                      type="button"
+                      className="app-ghost"
+                      onClick={() => {
+                        void (async () => {
+                          const pack = await getPeac(evidenceId);
+                          const blob = new Blob([JSON.stringify(pack, null, 2)], {
+                            type: "application/json",
+                          });
+                          const a = document.createElement("a");
+                          a.href = URL.createObjectURL(blob);
+                          a.download = "peac.json";
+                          a.click();
+                        })();
+                      }}
+                    >
+                      Agent receipt
+                    </button>
+                    <button
+                      type="button"
+                      className="app-ghost"
+                      onClick={() => {
+                        void (async () => {
+                          const pack = await getVerify(evidenceId);
+                          pushTrace({
+                            t: new Date().toISOString(),
+                            rail: "hop",
+                            msg: `verify ${JSON.stringify(pack)}`,
+                          });
+                        })();
+                      }}
+                    >
+                      Check proof
+                    </button>
+                  </div>
+                ) : null}
               </div>
+              {!evidenceId ? (
+                <p className="app-panel-summary">Your receipt appears after a completed check.</p>
+              ) : !drawerOpen ? (
+                <p className="app-panel-summary">Receipt ready. Open to view the details.</p>
+              ) : null}
               {drawerOpen ? (
                 evidenceLines.length ? (
                   <dl className="app-dl">
                     {evidenceLines.map((row) => (
                       <div key={`${row.k}-${row.v}`}>
-                        <dt>{row.k}</dt>
+                        <dt>{receiptLabel(row.k)}</dt>
                         <dd>{row.v || "—"}</dd>
                       </div>
                     ))}
