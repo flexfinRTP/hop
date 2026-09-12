@@ -1,0 +1,25 @@
+# Hop
+
+Confidential lending-risk query. HTTP 402 + OpenAPI. Fixed query types only.
+
+## Spec
+
+- Product spec: docs/07-where-we-are-2026-09-07.md
+- OpenAPI: openapi/openapi.yaml
+
+## Routes
+
+- POST /v1/query — Hedera exact x402 (Blocky402). Header Idempotency-Key required on paid retry.
+- GET /v1/evidence/{id} — public evidence (hashes). No Account.id. No policy caps.
+
+## Settlement
+
+- network: hedera:testnet
+- asset: "0.0.0" (HBAR tinybars) or a named HTS token id
+- extra.feePayer: from facilitator GET /supported — must match
+- Client: @x402/hedera ExactHederaScheme + createClientHederaSigner
+- Not Graph Base USDC x402
+
+## Query types
+
+market_params | position_counts | liquidations | policy_check | account_ltv

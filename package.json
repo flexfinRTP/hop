@@ -1,0 +1,17 @@
+{
+  "name": "hop",
+  "private": true,
+  "description": "Hop — confidential lending-risk query (ETHOnline 2026)",
+  "workspaces": [
+    "packages/shared",
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w @hop/api",
+    "dev:web": "npm run dev -w @hop/web"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

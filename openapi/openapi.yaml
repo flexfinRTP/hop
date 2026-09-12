@@ -1,0 +1,258 @@
+openapi: 3.1.0
+info:
+  title: Hop
+  description: Confidential lending-risk query. Hedera exact x402 (Blocky402). Aggregates only.
+  version: 0.0.1
+servers:
+  - url: http://localhost:8787
+paths:
+  /v1/query:
+    post:
+      operationId: query
+      summary: Paid lending-risk query
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Required on paid retry. Same key → same evidence id, no second settle.
+          schema:
+            type: string
+        - name: X-PAYMENT
+          in: header
+          required: false
+          description: Base64 PaymentPayload from ExactHederaScheme. Missing → 402.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QueryRequest"
+      responses:
+        "200":
+          description: Charged outcome (success, stale, or k_anon_denied)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryResponse"
+        "400":
+          description: Bad 402 payload — not charged
+        "402":
+          description: Payment required — not charged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentRequired"
+        "503":
+          description: policy_unavailable — not charged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+  /v1/evidence/{id}:
+    get:
+      operationId: getEvidence
+      summary: Public evidence pack (hashes, no rows, no caps)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Evidence
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Evidence"
+        "404":
+          description: Unknown id
+components:
+  schemas:
+    QueryType:
+      type: string
+      enum:
+        - market_params
+        - position_counts
+        - liquidations
+        - policy_check
+        - account_ltv
+    QueryRequest:
+      type: object
+      required: [query, protocols, max_block_lag]
+      properties:
+        query:
+          $ref: "#/components/schemas/QueryType"
+        protocols:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          maxItems: 2
+        max_block_lag:
+          type: integer
+          minimum: 0
+        window:
+          type: object
+          description: liquidations only
+          properties:
+            from:
+              type: string
+              format: date-time
+            to:
+              type: string
+              format: date-time
+    QueryStatus:
+      type: string
+      enum:
+        - accept
+        - reject
+        - k_anon_denied
+        - stale
+    QueryResponse:
+      type: object
+      required: [status, evidence]
+      properties:
+        status:
+          $ref: "#/components/schemas/QueryStatus"
+        aggregate:
+          description: Omitted on stale and k_anon_denied
+          type: object
+          additionalProperties: true
+        evidence:
+          $ref: "#/components/schemas/Evidence"
+    PaymentRequired:
+      type: object
+      required: [x402Version, accepts]
+      properties:
+        x402Version:
+          type: integer
+          example: 2
+        accepts:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentRequirements"
+    PaymentRequirements:
+      type: object
+      required: [scheme, network, amount, payTo, maxTimeoutSeconds, asset, extra]
+      properties:
+        scheme:
+          type: string
+          enum: [exact]
+        network:
+          type: string
+          example: hedera:testnet
+        amount:
+          type: string
+          description: tinybars when asset is 0.0.0
+        payTo:
+          type: string
+        maxTimeoutSeconds:
+          type: integer
+        asset:
+          type: string
+          description: "0.0.0 for HBAR, or HTS token id"
+          example: "0.0.0"
+        extra:
+          type: object
+          required: [feePayer]
+          properties:
+            feePayer:
+              type: string
+              description: MUST match facilitator GET /supported
+    ErrorBody:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum: [policy_unavailable, not_implemented]
+    Evidence:
+      type: object
+      required:
+        - id
+        - timestamp
+        - query
+        - graph
+        - policy
+        - k_anon
+        - aggregate_hash
+        - settlement
+        - cre
+        - status
+      properties:
+        id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        payer_account:
+          type: string
+        query:
+          type: object
+          required: [type, params]
+          properties:
+            type:
+              $ref: "#/components/schemas/QueryType"
+            params:
+              type: object
+              additionalProperties: true
+              description: No wallet list
+        graph:
+          type: object
+          required: [deployments]
+          properties:
+            deployments:
+              type: array
+              items:
+                type: object
+                required: [id, schemaVersion]
+                properties:
+                  id:
+                    type: string
+                  schemaVersion:
+                    type: string
+                    example: "3.1.0"
+                  block:
+                    type: integer
+        policy:
+          type: object
+          required: [version, threshold_hash]
+          properties:
+            version:
+              type: string
+            threshold_hash:
+              type: string
+              description: Hash of private table. Never the caps.
+        k_anon:
+          type: object
+          required: [result]
+          properties:
+            result:
+              type: string
+              enum: [pass, fail, not_applicable]
+        aggregate_hash:
+          type: string
+        settlement:
+          type: object
+          required: [ref]
+          properties:
+            ref:
+              type: string
+              description: Blocky402 settlement ref
+        cre:
+          type: object
+          required: [mode]
+          properties:
+            mode:
+              type: string
+              enum: [simulation, don]
+            artifact:
+              type: string
+        status:
+          $ref: "#/components/schemas/QueryStatus"
+        hcs_seq:
+          type: integer
+          description: Optional. Not in MVP until paid query works.

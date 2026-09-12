@@ -1,0 +1,11 @@
+{
+  "schedule": "*/30 * * * * *",
+  "query": "policy_check",
+  "protocols": ["aave-v3", "compound-v3"],
+  "max_block_lag": 50,
+  "graph": {
+    "protocol_a_url": "",
+    "protocol_b_url": "",
+    "schemaVersion": "3.1.0"
+  }
+}

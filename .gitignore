@@ -1,0 +1,63 @@
+# Dependencies / build
+node_modules/
+dist/
+build/
+coverage/
+.nyc_output/
+.turbo/
+.vite/
+*.tsbuildinfo
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+*.p12
+id_rsa*
+wallet.json
+credentials.json
+secrets.local.yaml
+secrets.local.json
+
+# Private agent / strategy docs (local Cursor context only)
+docs/
+THREAT.md
+AGENTS.md
+CLAUDE.md
+.claude/
+.agents/
+.agent/
+agent-transcripts/
+**/*.canvas.tsx
+**/*.canvas.json
+handoff.md
+**/handoff-*.md
+context-window.md
+context-handoff.md
+
+# Cursor / IDE (local)
+.cursor/
+.idea/
+.vscode/
+*.swp
+*.orig
+.history/
+
+# CRE / WASM local
+*.wasm
+.cre/
+cre/**/node_modules/
+cre/**/bun.lockb
+cre/.env
+cre/**/.env
+
+# OS
+.DS_Store
+Thumbs.db
