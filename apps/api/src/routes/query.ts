@@ -4,6 +4,7 @@ import {
   POSTURE,
   QUERY_TYPES,
   chainHash,
+  decisionReceiptFromEvidence,
   evaluateMandate,
   hashJson,
   hopReason,
@@ -17,13 +18,20 @@ import {
   type QueryType,
 } from "@hop/shared";
 import { loadConfig, queryParams, quoteAmount, requirements } from "../config.js";
-import { cachedPublicUtil } from "../graph.js";
+import { cachedPublicUtil, checkGraphReadiness } from "../graph.js";
 import { submitReceiptHash } from "../hcs.js";
 import { checkCreCli, runJoin } from "../join-run.js";
 import { allowPayer, rateOk } from "../rate-limit.js";
 import {
+  claimDurableRequest,
+  claimIdempotency,
+  claimPayment,
+  releaseIdempotency,
+  releaseDurableClaim,
+  releasePayment,
   currentChain,
   emit,
+  enqueueHcsEvidence,
   getByIdempotency,
   getSpend,
   getTrace,
@@ -32,8 +40,10 @@ import {
   paymentHashOf,
   paymentReplay,
   put,
+  rememberDemoQuote,
   releaseMandate,
   reserveMandate,
+  updateDurableClaim,
 } from "../store.js";
 import {
   decodePayment,
@@ -122,18 +132,39 @@ query.post("/", async (c) => {
     );
   }
   if (cfg.hopJoin === "cre") {
+    if (!cfg.graphApiKey || !cfg.policyCommitmentSalt) {
+      emit(traceId, "cre", "required CRE secrets unavailable");
+      return c.json({ error: "cre_secrets_unconfigured" }, 503);
+    }
     const creCli = await checkCreCli(cfg);
     if (!creCli.ok) {
       emit(traceId, "cre", `CRE CLI unavailable: ${creCli.detail}`);
       return c.json(
         {
           error: "cre_unavailable",
-          detail: "The CRE CLI is not available to the API process.",
+          detail: "The CRE CLI is unavailable or not authenticated.",
           trace: getTrace(traceId),
         },
         503,
       );
     }
+  }
+  if (cfg.worldRequired && !worldReady(cfg)) {
+    emit(traceId, "world", "world_unconfigured");
+    return c.json({ error: "world_unconfigured" }, 503);
+  }
+  const graphReadiness = await checkGraphReadiness(
+    cfg,
+    parsed.protocols,
+    parsed.max_block_lag,
+  );
+  if (!graphReadiness.ok) {
+    emit(traceId, "graph", graphReadiness.error ?? "graph_unavailable");
+    return c.json({
+      error: "graph_unavailable",
+      detail: graphReadiness.error,
+      sources: graphReadiness.sources,
+    }, 503);
   }
 
   const publicUtil = cachedPublicUtil(parsed);
@@ -152,6 +183,7 @@ query.post("/", async (c) => {
       return c.json({ error: "merchant_unconfigured" }, 503);
     }
     const accepts = [requirements(cfg, feePayer, amount)];
+    if (cfg.demoSign) rememberDemoQuote(accepts[0]);
     const required = {
       x402Version: 2 as const,
       resource: { url: "/v1/query", mimeType: "application/json" },
@@ -183,6 +215,10 @@ query.post("/", async (c) => {
         status: existing.json.status,
         aggregate: existing.aggregate,
         evidence: existing.json,
+        receipt: decisionReceiptFromEvidence(existing.json, {
+          semantics: "idempotent_replay",
+          settled: false,
+        }),
         reason: existing.json.reason,
         mandate: existing.json.mandate,
         trace: getTrace(traceId),
@@ -257,8 +293,106 @@ query.post("/", async (c) => {
     emit(traceId, "world", "unique human");
   }
 
+  const claim = claimIdempotency(idem, bodyHash);
+  if (claim.status === "conflict") {
+    return c.json({ error: "idempotency_conflict" }, 400);
+  }
+  if (claim.status === "pending") {
+    await claim.wait;
+    const completed = getByIdempotency(idem);
+    if (!completed) {
+      return c.json({ error: "idempotency_incomplete" }, 409);
+    }
+    emit(traceId, "hedera", "Idempotency-Key joined in-flight request; no second settle");
+    return c.json(
+      {
+        status: completed.json.status,
+        aggregate: completed.aggregate,
+        evidence: completed.json,
+        receipt: decisionReceiptFromEvidence(completed.json, {
+          semantics: "idempotent_replay",
+          settled: false,
+        }),
+        reason: completed.json.reason,
+        mandate: completed.json.mandate,
+        trace: getTrace(traceId),
+      },
+      200,
+    );
+  }
+
+  if (claimPayment(payHash, idem) === "replay") {
+    releaseIdempotency(idem);
+    emit(traceId, "hedera", "X-PAYMENT replay in flight");
+    return c.json({ error: "payment_replay" }, 400);
+  }
+
+  const durable = await claimDurableRequest({
+    idempotencyKey: idem,
+    bodyHash,
+    paymentHash: payHash,
+    requestPayload: parsed,
+  }).catch((error) => {
+    emit(traceId, "hop", `durable claim failed ${String(error)}`);
+    return null;
+  });
+  if (!durable && cfg.databaseUrl) {
+    releasePayment(payHash, idem);
+    releaseIdempotency(idem);
+    return c.json({ error: "storage_unavailable" }, 503);
+  }
+  if (durable?.status === "conflict") {
+    releasePayment(payHash, idem);
+    releaseIdempotency(idem);
+    return c.json({ error: "idempotency_conflict" }, 400);
+  }
+  if (durable?.status === "payment_replay") {
+    releasePayment(payHash, idem);
+    releaseIdempotency(idem);
+    return c.json({ error: "payment_replay" }, 400);
+  }
+  if (durable?.status === "existing" && durable.evidence) {
+    releasePayment(payHash, idem);
+    releaseIdempotency(idem);
+    const stored = durable.evidence as {
+      json?: Evidence;
+      aggregate?: Record<string, unknown>;
+    };
+    if (stored.json) {
+      return c.json({
+        status: stored.json.status,
+        aggregate: stored.aggregate,
+        evidence: stored.json,
+        receipt: decisionReceiptFromEvidence(stored.json, {
+          semantics: "idempotent_replay",
+          settled: false,
+        }),
+        reason: stored.json.reason,
+        mandate: stored.json.mandate,
+        trace: getTrace(traceId),
+      });
+    }
+  }
+  if (durable?.status === "in_flight") {
+    releasePayment(payHash, idem);
+    releaseIdempotency(idem);
+    return c.json(
+      {
+        error: "request_in_progress",
+        state: durable.claim.state,
+        settlement: durable.claim.settlementRef,
+      },
+      409,
+    );
+  }
+
+  let durableState: "disabled" | "claimed" | "verified" | "settling" | "settled" | "fulfilled" =
+    durable?.status === "acquired" ? "claimed" : "disabled";
+
+  try {
   const amountN = Number(amount);
   let reserved: Mandate | null = null;
+  let mandateReservationId: string | undefined;
   let decision: ReturnType<typeof evaluateMandate> | undefined;
   if (mandate) {
     const now = Date.now();
@@ -281,29 +415,45 @@ query.post("/", async (c) => {
       return c.json({ error: "mandate_review", mandate: decision }, 403);
     }
     reserved = bound;
-    reserveMandate(bound.id, amountN, now);
+    mandateReservationId = reserveMandate(bound.id, amountN, now);
   }
 
   if (!parsePolicyTable(cfg.policyJson)) {
-    if (reserved) releaseMandate(reserved.id, amountN);
+    if (reserved && mandateReservationId) releaseMandate(reserved.id, mandateReservationId);
     emit(traceId, "cre", "policy_unavailable");
     return c.json({ error: "policy_unavailable" }, 503);
   }
 
+  if (durableState !== "disabled") {
+    await updateDurableClaim(idem, "verified", { payer });
+    durableState = "verified";
+  }
   emit(traceId, "hedera", "POST Blocky402 /settle");
+  if (durableState !== "disabled") {
+    await updateDurableClaim(idem, "settling", { payer });
+    durableState = "settling";
+  }
   let settle: { success?: boolean; transaction?: string; payer?: string };
   try {
     settle = await settlePayment(cfg, payload, reqs);
   } catch {
-    if (reserved) releaseMandate(reserved.id, amountN);
+    if (reserved && mandateReservationId) releaseMandate(reserved.id, mandateReservationId);
     return c.json({ error: "bad_payment" }, 400);
   }
   if (!settle.success) {
-    if (reserved) releaseMandate(reserved.id, amountN);
+    if (reserved && mandateReservationId) releaseMandate(reserved.id, mandateReservationId);
+    if (durableState !== "disabled") {
+      await updateDurableClaim(idem, "verified", { payer, errorCode: "settle_rejected" });
+      durableState = "verified";
+    }
     emit(traceId, "hedera", "settle failed");
     return c.json({ error: "bad_payment" }, 400);
   }
   const settlementRef = settle.transaction ?? "";
+  if (durableState !== "disabled") {
+    await updateDurableClaim(idem, "settled", { payer, settlementRef });
+    durableState = "settled";
+  }
   emit(traceId, "hedera", `settlement ${settlementRef}`);
 
   let joined;
@@ -366,23 +516,37 @@ query.post("/", async (c) => {
       world: worldSession ? "unique_human" : "off",
     },
   };
-  evidence.peac_hash = peacHash(peacFromEvidence(evidence));
-
-  try {
-    const seq = await submitReceiptHash(cfg, id, evidence.aggregate_hash, settlementRef, {
+  const hcsPayload = {
+    aggregateHash: evidence.aggregate_hash,
+    settlementRef,
+    extra: {
       mandate_hash: mandateHash,
       chain_hash: link,
       policy_hash: evidence.policy.threshold_hash,
-      cre_report_hash: joined.cre.report_hash,
+      cre_commitment_hash:
+        joined.cre.cre_commitment_hash ?? joined.cre.report_hash,
       world_hash: evidence.world?.nullifier_hash,
-    });
-    if (seq !== undefined) {
-      evidence.hcs_seq = seq;
-      emit(traceId, "hedera", `HCS seq ${seq}`);
+    },
+  };
+  let hcsAnchored = false;
+  try {
+    const anchor = await submitReceiptHash(
+      cfg,
+      id,
+      hcsPayload.aggregateHash,
+      hcsPayload.settlementRef,
+      hcsPayload.extra,
+    );
+    if (anchor) {
+      evidence.hcs_seq = anchor.sequence;
+      evidence.hcs_topic = anchor.topic;
+      hcsAnchored = true;
+      emit(traceId, "hedera", `HCS ${anchor.topic} seq ${anchor.sequence}`);
     }
   } catch {
     emit(traceId, "hedera", "HCS submit skipped");
   }
+  evidence.peac_hash = peacHash(peacFromEvidence(evidence));
 
   await put({
     id,
@@ -394,6 +558,17 @@ query.post("/", async (c) => {
     settled: true,
     storedAt: Date.now(),
   });
+  if (!hcsAnchored) {
+    await enqueueHcsEvidence(id, hcsPayload).catch(() => undefined);
+  }
+  if (durableState !== "disabled") {
+    await updateDurableClaim(idem, "fulfilled", {
+      payer,
+      settlementRef,
+      evidenceId: id,
+    });
+    durableState = "fulfilled";
+  }
 
   c.header(
     "PAYMENT-RESPONSE",
@@ -410,10 +585,21 @@ query.post("/", async (c) => {
       status: joined.status,
       aggregate: joined.aggregate,
       evidence,
+      receipt: decisionReceiptFromEvidence(evidence, {
+        semantics: "attempt",
+        settled: true,
+      }),
       reason,
       mandate: evidence.mandate,
       trace: getTrace(traceId),
     },
     200,
   );
+  } finally {
+    if (durableState === "claimed" || durableState === "verified") {
+      await releaseDurableClaim(idem).catch(() => undefined);
+    }
+    releasePayment(payHash, idem);
+    releaseIdempotency(idem);
+  }
 });

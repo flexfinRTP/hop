@@ -1,33 +1,80 @@
 ---
 name: hop-query
-description: Paid Hop confidential lending-risk query over Hedera x402 + live Graph + CRE policy table. Use when an agent needs policy_check / market_params / position_counts / liquidations / account_ltv without exporting wallets or caps.
+description: Paid Hop decision query (finance demo: lending policy gate). Use for policy_check, market_params, position_counts, liquidations, or account_ltv over live Messari lending subgraphs. Settlement is public Hedera x402 exact (Blocky402). Policy values and Account.id are omitted from the result.
 ---
 
 # Hop query
 
-OpenAPI: `openapi/openapi.yaml`. API default `http://localhost:8787`.
+Point an agent at this skill. It can pay Hedera exact x402 and call Hop in seconds. No SDK. No API key.
 
-## Rules
+HTTP contract: `openapi/openapi.yaml`. Technical reference: `documentation/README.md`. Default API: `http://localhost:8787`.
 
-- Hop is a deterministic query service, not an LLM or agent orchestrator. The caller agent must
-  map natural language to a supported query type and explicitly choose one or two configured
-  protocol keys. Hop does not interpret free text or choose a hidden data source.
-- Fixed query types only. No SQL/GraphQL from the client.
-- Call `hop_meta` first to discover configured protocol keys and availability.
-- Client MUST use Hedera exact (`@x402/hedera` ExactHederaScheme). Not Graph Base USDC x402.
-- `extra.feePayer` from facilitator `GET /supported`. Do not hardcode.
-- Idempotency-Key required on paid retry. Same key → same evidence, no second settle.
-- Optional `mandate_json` / env `HOP_MANDATE_JSON`. Deterministic budget. LLM never raises the cap or pays.
+Hop is a deterministic resource server. Map the user request to a supported query type and to protocol keys from `hop_meta`. Do not send free text, SQL, or GraphQL. Do not invent sources.
+
+## Constraints
+
+- Client scheme: `@x402/hedera` `ExactHederaScheme`. Not Graph Base USDC x402.
+- `extra.feePayer` from facilitator `GET {BLOCKY402}/supported`. Do not hardcode.
+- `Idempotency-Key` required on the paid retry. Same key returns the same evidence id; no second settle.
+- Mandate is optional (`mandate_json` or `HOP_MANDATE_JSON`). The model must not raise `max_tinybars` or sign payment.
 - `confirm=true` only after HTTP 403 `mandate_review`.
-- Optional `world_token` from `POST /v1/world/verify`. Required when API `WORLD_REQUIRED=1`.
-- Never ask for or return Account.id or policy cap values. Metric names are hashed.
-- If CRE mode is configured but the runner is unavailable, stop on `503 cre_unavailable`; no payment should be attempted.
+- `world_token` from `POST /v1/world/verify` when `WORLD_REQUIRED=1`.
+- Stop on `503 cre_unavailable` / `graph_unconfigured` / `policy_unavailable`. Those are not paid.
+- Paid 200 is charge-for-attempt. `stale` and `k_anon_denied` still settle. Persist `receipt.evidence_id`. Do not retry the same payment payload.
 
-## Flow
+## Procedure
 
-1. `hop_meta` then `hop_mandate` (remaining budget).
-2. Map the user's request to `{ query, protocols, max_block_lag }`, then `POST /v1/query` → 402 `accepts[]`.
-3. Sign Hedera exact payload. Retry with `X-PAYMENT` + `Idempotency-Key` + mandate.
-4. 200: aggregate + evidence hashes. `hop_evidence` / `hop_peac` / `hop_verify`.
+```ts
+import { ExactHederaScheme } from "@x402/hedera/exact/client";
+import { createClientHederaSigner, PrivateKey } from "@x402/hedera";
 
-MCP: `hop_query`, `hop_evidence`, `hop_peac`, `hop_verify`, `hop_mandate`, `hop_meta`, `hop_world_rp_context`, `hop_world_verify` (`npm start -w @hop/mcp`).
+const API = process.env.HOP_API_URL ?? "http://localhost:8787";
+
+const meta = await fetch(`${API}/v1/meta`).then((r) => r.json());
+const protocols = meta.protocols.filter((p) => p.configured).map((p) => p.key);
+// choose one or two keys from that list; never invent ids
+
+const body = {
+  query: "policy_check", // or market_params | position_counts | liquidations | account_ltv
+  protocols,
+  max_block_lag: 50,
+};
+
+const unpaid = await fetch(`${API}/v1/query`, {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify(body),
+});
+if (unpaid.status === 503) throw new Error(await unpaid.text()); // do not pay
+if (unpaid.status !== 402) throw new Error(`unexpected ${unpaid.status}`);
+
+const { accepts } = await unpaid.json();
+const requirements = accepts[0];
+// requirements.scheme === "exact"
+// requirements.network === "hedera:testnet"
+// requirements.asset === "0.0.0" unless HTS
+
+const signer = createClientHederaSigner({
+  accountId: process.env.HEDERA_PAYER_ID!,
+  privateKey: PrivateKey.fromString(process.env.HEDERA_PAYER_KEY!),
+});
+const payload = await new ExactHederaScheme(signer).createPaymentPayload(2, requirements);
+
+const paid = await fetch(`${API}/v1/query`, {
+  method: "POST",
+  headers: {
+    "content-type": "application/json",
+    "X-PAYMENT": Buffer.from(JSON.stringify(payload)).toString("base64"),
+    "Idempotency-Key": crypto.randomUUID(),
+  },
+  body: JSON.stringify(body),
+});
+const result = await paid.json();
+// result.receipt.schema === "hop.decision.v1"
+// result.receipt.evidence_id is the public pack id
+// result.status stale | k_anon_denied is still charged (attempt). Persist the receipt. Do not reuse X-PAYMENT.
+// hop_evidence / hop_peac / hop_verify with result.receipt.evidence_id
+// hop_verify returns tiers; cre_don_verified is true only after a matched DON result
+```
+
+MCP: `hop_meta`, `hop_mandate`, `hop_query`, `hop_evidence`, `hop_peac`, `hop_verify`, `hop_world_rp_context`, `hop_world_verify` (`npm start -w @hop/mcp`). Discovery: `GET /.well-known/agent-card.json`.

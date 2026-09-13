@@ -1,4 +1,4 @@
-import { hashJson } from "./hash.js";
+import { hashJson, keyedHashJson } from "./hash.js";
 import type { PolicyCap, PolicyTable } from "./types.js";
 
 export function parsePolicyTable(raw: string | undefined | null): PolicyTable | null {
@@ -43,8 +43,9 @@ function isPolicyCap(value: unknown): value is PolicyCap {
   );
 }
 
-export function thresholdHash(table: PolicyTable): string {
-  return hashJson({ version: table.version, caps: table.caps });
+export function thresholdHash(table: PolicyTable, commitmentKey?: string): string {
+  const value = { version: table.version, caps: table.caps };
+  return commitmentKey ? keyedHashJson(commitmentKey, value) : hashJson(value);
 }
 
 export function compare(op: PolicyCap["op"], observed: number, cap: number): boolean {

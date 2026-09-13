@@ -21,11 +21,53 @@ export type QueryRequest = {
 
 export type GraphDeployment = {
   id: string;
+  subgraphId: string;
+  deploymentId?: string;
   slug: string;
   schemaVersion: string;
   subgraphVersion?: string;
+  methodologyVersion?: string;
   block?: number;
   blockTimestamp?: number;
+};
+
+export const VERIFICATION_TIERS = [
+  "recomputed",
+  "settlement_confirmed",
+  "hcs_confirmed",
+  "cre_simulation",
+  "cre_don_verified",
+] as const;
+
+export type VerificationTier = (typeof VERIFICATION_TIERS)[number];
+
+export type VerificationTiers = Record<VerificationTier, boolean>;
+
+export type VerifyMeans = {
+  ok_means: "local_hashes_and_public_settlement";
+  cre_ok_means: "structural_simulation_fields";
+};
+
+export type ExternalVerification = {
+  checked_at: string;
+  mirror_node: string;
+  settlement: {
+    verified: boolean;
+    transaction_id: string;
+    consensus_timestamp?: string;
+    result?: string;
+    payer_match: boolean;
+    payee_match: boolean;
+    amount_match: boolean;
+  };
+  hcs?: {
+    verified: boolean;
+    topic: string;
+    sequence: number;
+    consensus_timestamp?: string;
+    payload_match: boolean;
+  };
+  error?: string;
 };
 
 export type Evidence = {
@@ -43,12 +85,22 @@ export type Evidence = {
     artifact?: string;
     tee?: string;
     trigger?: "http";
+    cre_commitment_hash?: string;
+    /** @deprecated historical evidence only */
     report_hash?: string;
     execution_id?: string;
+    don_status?: string;
+    don_executed_in_tee?: boolean;
   };
   world?: { nullifier_hash: string };
   status: QueryStatus;
+  verdict?: import("./decision.js").Verdict;
+  reason_code?: import("./decision.js").ReasonCode;
+  screening?: import("./decision.js").Screening;
+  identity?: import("./decision.js").IdentityReceipt;
   hcs_seq?: number;
+  hcs_topic?: string;
+  verification?: ExternalVerification;
   mandate?: {
     id: string;
     hash: string;
@@ -58,6 +110,11 @@ export type Evidence = {
   };
   chain?: { prev: string; hash: string };
   meter?: { amount: string; protocols: number; util?: number };
+  asset?: {
+    intent_id: string;
+    contract_id: string;
+    lifecycle_verified: boolean;
+  };
   peac_hash?: string;
   reason?: HopReason;
   posture?: HopPosture;
@@ -75,14 +132,66 @@ export type HopPosture = {
   ofac: "not_screened";
   mor: "testnet_payee";
   cre: "simulation" | "don";
-  ats: "simulated";
+  ats: "unconfigured" | "intent" | "verified" | "simulated";
   world?: "off" | "unique_human";
+};
+
+export const DEMO_VERTICAL = "finance.lending_policy_gate" as const;
+export type DemoVertical = typeof DEMO_VERTICAL;
+export const DECISION_RECEIPT_SCHEMA = "hop.decision.v1" as const;
+
+export type ChargeSemantics = "attempt" | "idempotent_replay";
+
+export type VerifiableDecisionReceipt = {
+  schema: typeof DECISION_RECEIPT_SCHEMA;
+  decision: {
+    status: QueryStatus;
+    verdict: import("./decision.js").Verdict;
+    reason_code: import("./decision.js").ReasonCode;
+    query: QueryType;
+    demo_vertical: DemoVertical;
+  };
+  privacy: {
+    policy_values: "omitted";
+    graph_source: "public";
+    settlement: "public";
+  };
+  payment: {
+    network: "hedera:testnet";
+    scheme: "exact";
+    rail: "hedera_x402_exact";
+    ref: string;
+    payer_account?: string;
+    amount: string;
+  };
+  charge: {
+    semantics: ChargeSemantics;
+    settled: boolean;
+  };
+  screening: import("./decision.js").Screening;
+  identity?: import("./decision.js").IdentityReceipt;
+  hcs?: { topic?: string; sequence?: number };
+  graph: Evidence["graph"];
+  cre: Evidence["cre"];
+  hashes: {
+    aggregate: string;
+    policy: string;
+    peac?: string;
+    chain?: string;
+    cre_commitment?: string;
+  };
+  verification?: {
+    tiers: VerificationTiers;
+  };
+  evidence_id: string;
+  verify_path: string;
 };
 
 export type QueryResponse = {
   status: QueryStatus;
   aggregate?: Record<string, unknown>;
   evidence: Evidence;
+  receipt: VerifiableDecisionReceipt;
   reason?: HopReason;
   mandate?: Evidence["mandate"];
   trace?: TraceEvent[];
@@ -132,6 +241,12 @@ export type PolicyTable = {
   caps: PolicyCap[];
 };
 
+export type GraphInterestRate = {
+  side?: string | null;
+  type?: string | null;
+  rate?: string | null;
+};
+
 export type GraphMarket = {
   id: string;
   name?: string | null;
@@ -142,6 +257,7 @@ export type GraphMarket = {
   totalDepositBalanceUSD: string;
   inputToken?: { decimals?: number | string | null } | null;
   inputTokenPriceUSD?: string | null;
+  rates?: GraphInterestRate[] | null;
 };
 
 export type GraphPosition = {
@@ -166,9 +282,11 @@ export type GraphLiquidate = {
 export type ProtocolSnapshot = {
   slug: string;
   url: string;
-  deploymentId: string;
+  subgraphId: string;
+  deploymentId?: string;
   schemaVersion: string;
   subgraphVersion?: string;
+  methodologyVersion?: string;
   block?: number;
   blockTimestamp?: number;
   chainHead?: number;
@@ -215,9 +333,9 @@ export const CHARGE = {
 
 export const LABELS = {
   cre: "CRE: handlerInTee",
-  rails: "data: Graph (EVM) · pay: Hedera",
+  rails: "pay: Hedera x402 exact · decide: CRE join · verify: evidence",
   world: "World ID unique human",
-  ats: "simulated treasury token on Hedera testnet; no claim on T-bills, no investment rights, no promised yield",
+  ats: "Hedera ATS testnet lifecycle",
   demoGraph: "demo: Graph lending",
   mandate: "mandate · LLM never pays",
   peac: "PEAC-shaped receipt",
@@ -232,7 +350,7 @@ export const POSTURE: HopPosture = {
   ofac: "not_screened",
   mor: "testnet_payee",
   cre: "simulation",
-  ats: "simulated",
+  ats: "unconfigured",
   world: "off",
 };
 

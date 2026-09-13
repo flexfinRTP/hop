@@ -1,3 +1,5 @@
+import type { AssetIntent, AssetTerms } from "@hop/shared";
+
 export type QueryType =
   | "market_params"
   | "position_counts"
@@ -25,25 +27,45 @@ export type MandateView = {
 };
 
 export type Meta = {
+  product?: string;
+  network?: string;
+  payTo?: string | null;
+  schemaVersion?: string;
   demo_sign: boolean;
   wall_buffer: number;
   graph_ready: boolean;
+  graph_configured?: boolean;
   asset: string;
   amount: string;
   meter_per_protocol?: string;
-  protocols: { key: string; slug: string; id: string; configured: boolean }[];
+    protocols: { key: string; slug: string; id: string; configured: boolean }[];
   labels: { cre: string; rails: string; demoGraph: string; mandate?: string; peac?: string; hcs?: string; world?: string };
   posture?: { custody: string; ofac: string; mor: string; cre?: string };
   mandate?: MandateView | null;
   mandate_required?: boolean;
   hcs?: { ready: boolean; topic: string | null; auto: boolean };
   hop_join?: string;
+  mcp_tools?: string[];
+  agent_card?: string;
+  documentation?: string;
+  storage?: { mode: "postgres" | "file"; durable: boolean };
+  agent_registration?: string;
   cre?: {
     join: string;
     tee: string;
     trigger: string;
     workflow_id: string | null;
+    don_trigger_configured?: boolean;
     cli_ready?: boolean;
+    execution?: string;
+  };
+  agent0?: { configured: boolean; registered: boolean; discovery: string };
+  ats?: {
+    configured: boolean;
+    workspace: string;
+    factory_address: string | null;
+    resolver_address: string | null;
+    sdk_version: string | null;
   };
   world?: {
     ready: boolean;
@@ -53,6 +75,106 @@ export type Meta = {
     action: string;
     environment: "staging" | "production";
   };
+};
+
+export type EvidencePack = {
+  id: string;
+  timestamp: string;
+  payer_account?: string;
+  query: { type: QueryType; params: Record<string, unknown> };
+  graph: {
+    deployments: {
+      id: string;
+      subgraphId?: string;
+      deploymentId?: string;
+      slug?: string;
+      schemaVersion: string;
+      methodologyVersion?: string;
+      block?: number;
+      blockTimestamp?: number;
+    }[];
+  };
+  policy: { version: string; threshold_hash: string };
+  k_anon: { result: "pass" | "fail" | "not_applicable" };
+  aggregate_hash: string;
+  settlement: { ref: string };
+  cre: {
+    mode: "simulation" | "don";
+    artifact?: string;
+    tee?: string;
+    trigger?: "http";
+    cre_commitment_hash?: string;
+    report_hash?: string;
+    execution_id?: string;
+    don_status?: string;
+    don_executed_in_tee?: boolean;
+  };
+  world?: { nullifier_hash: string };
+  status: "accept" | "reject" | "k_anon_denied" | "stale";
+  hcs_seq?: number;
+  hcs_topic?: string;
+  mandate?: {
+    id: string;
+    hash: string;
+    remaining_tinybars: number;
+    remaining_hops: number;
+    decision: "ALLOW" | "DENY" | "REVIEW";
+  };
+  chain?: { prev: string; hash: string };
+  meter?: { amount: string; protocols: number; util?: number };
+  peac_hash?: string;
+  verification?: {
+    checked_at: string;
+    settlement: { verified: boolean };
+    hcs?: { verified: boolean };
+    error?: string;
+  };
+  asset?: {
+    intent_id: string;
+    contract_id: string;
+    lifecycle_verified: boolean;
+  };
+  reason?: {
+    stamp: string;
+    metric_hash?: string;
+    observed?: number;
+    freshness: "live" | "stale";
+  };
+};
+
+export type DecisionReceipt = {
+  schema: "hop.decision.v1";
+  decision: {
+    status: EvidencePack["status"];
+    query: QueryType;
+    demo_vertical: "finance.lending_policy_gate";
+  };
+  privacy: {
+    policy_values: "omitted";
+    graph_source: "public";
+    settlement: "public";
+  };
+  payment: {
+    network: "hedera:testnet";
+    scheme: "exact";
+    ref: string;
+    payer_account?: string;
+    amount: string;
+  };
+  charge: {
+    semantics: "attempt" | "idempotent_replay";
+    settled: boolean;
+  };
+  graph: EvidencePack["graph"];
+  cre: EvidencePack["cre"];
+  hashes: {
+    aggregate: string;
+    policy: string;
+    peac?: string;
+    chain?: string;
+    cre_commitment?: string;
+  };
+  evidence_id: string;
 };
 
 async function api(path: string, init?: RequestInit): Promise<Response> {
@@ -114,9 +236,17 @@ export async function signDemo(requirements: unknown): Promise<string> {
   return json.payment;
 }
 
-export async function getEvidence(id: string): Promise<unknown> {
+export async function getEvidence(id: string): Promise<EvidencePack> {
   const res = await api(`/v1/evidence/${id}`);
-  return res.json();
+  if (!res.ok) throw new Error(`evidence_${res.status}`);
+  return res.json() as Promise<EvidencePack>;
+}
+
+export async function getEvidenceList(limit = 50): Promise<EvidencePack[]> {
+  const res = await api(`/v1/evidence?limit=${Math.max(1, Math.min(100, Math.trunc(limit)))}`);
+  if (!res.ok) throw new Error(`evidence_list_${res.status}`);
+  const json = (await res.json()) as { items?: EvidencePack[] };
+  return Array.isArray(json.items) ? json.items : [];
 }
 
 export async function getPeac(id: string): Promise<unknown> {
@@ -124,9 +254,153 @@ export async function getPeac(id: string): Promise<unknown> {
   return res.json();
 }
 
-export async function getVerify(id: string): Promise<unknown> {
+export type VerifyPack = {
+  ok: boolean;
+  tiers?: {
+    recomputed: boolean;
+    settlement_confirmed: boolean;
+    hcs_confirmed: boolean;
+    cre_simulation: boolean;
+    cre_don_verified: boolean;
+  };
+  ok_means?: "local_hashes_and_public_settlement";
+  cre_ok_means?: "structural_simulation_fields";
+  hcs_present?: boolean;
+  receipt?: DecisionReceipt;
+  aggregate_ok?: boolean;
+  chain_ok?: boolean;
+  predecessor_ok?: boolean;
+  peac_ok?: boolean;
+  cre_ok?: boolean;
+  settlement_ref_present?: boolean;
+  external_settlement_verified?: boolean;
+  external_hcs_verified?: boolean;
+  verification?: EvidencePack["verification"];
+  id?: string;
+  error?: string;
+};
+
+export async function getVerify(id: string): Promise<VerifyPack> {
   const res = await api(`/v1/evidence/${id}/verify`);
-  return res.json();
+  const json = (await res.json().catch(() => ({}))) as Partial<VerifyPack> & { error?: string };
+  if (!res.ok || typeof json.ok !== "boolean") {
+    throw new Error(json.error ?? `verify_${res.status}`);
+  }
+  return json as VerifyPack;
+}
+
+export type AtsConfig = {
+  configured: boolean;
+  network: "hedera:testnet";
+  chain_id: 296;
+  factory_address: string | null;
+  resolver_address: string | null;
+  rpc_url: string;
+  mirror_node_url: string;
+  explorer_url: string;
+  sdk_version: string | null;
+  bond_config_id: string | null;
+  bond_config_version: number;
+  wallet_required: boolean;
+  custody: "browser_wallet";
+  stages: string[];
+  optional_stages?: string[];
+};
+
+export async function getAtsConfig(): Promise<AtsConfig> {
+  const res = await api("/v1/assets/config");
+  if (!res.ok) throw new Error(`ats_config_${res.status}`);
+  return res.json() as Promise<AtsConfig>;
+}
+
+export async function getAssetIntents(limit = 50): Promise<AssetIntent[]> {
+  const res = await api(`/v1/assets?limit=${Math.max(1, Math.min(100, Math.trunc(limit)))}`);
+  if (!res.ok) throw new Error(`asset_intents_${res.status}`);
+  const json = (await res.json()) as { items?: AssetIntent[] };
+  return Array.isArray(json.items) ? json.items : [];
+}
+
+export async function createAssetIntent(input: {
+  evidence_id: string;
+  action: AssetIntent["action"];
+  terms: AssetTerms;
+  controllist: "allowlist" | "blocklist";
+  clearing: boolean;
+  kyc?: boolean;
+  parent_intent_id?: string;
+}): Promise<AssetIntent> {
+  const res = await api("/v1/assets/intents", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const json = (await res.json().catch(() => ({}))) as {
+    intent?: AssetIntent;
+    error?: string;
+  };
+  if (!res.ok || !json.intent) throw new Error(json.error ?? `asset_intent_${res.status}`);
+  return json.intent;
+}
+
+export async function submitAssetTransactions(
+  intentId: string,
+  input: {
+    wallet_account: string;
+    asset_contract: string;
+    transactions: { stage: string; transaction_id: string }[];
+  },
+): Promise<AssetIntent> {
+  const res = await api(`/v1/assets/intents/${encodeURIComponent(intentId)}/transactions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const json = (await res.json().catch(() => ({}))) as {
+    intent?: AssetIntent;
+    error?: string;
+  };
+  if (!res.ok || !json.intent) throw new Error(json.error ?? `asset_verify_${res.status}`);
+  return json.intent;
+}
+
+export type LiquidationState = {
+  configured: boolean;
+  chain_id: 11155111;
+  participant: string | null;
+  workflow_id: string | null;
+  contracts: {
+    challenge: string;
+    veth: string;
+    vusd: string;
+    explorer: string;
+  };
+  challenge_open?: boolean;
+  joined?: boolean;
+  scenario?: {
+    state: "waiting" | "active" | "stopped";
+    started_at: string;
+    ended_at: string;
+  };
+  position?: {
+    collateral_veth_units: string;
+    debt_vusd_units: string;
+    stored_health_factor_x100: string;
+    live_health_factor_x100: string | null;
+    operations: string;
+    last_update_time: string;
+    cumulative_debt_time: string;
+  };
+  reserves?: { veth_units: string; vusd_units: string };
+  veth_price_vusd_units?: string;
+  loan_continuity_score_bps?: string;
+  error?: string;
+};
+
+export async function getLiquidationState(): Promise<LiquidationState> {
+  const res = await api("/v1/liquidation");
+  const json = (await res.json().catch(() => ({}))) as LiquidationState;
+  if (!res.ok) throw new Error(json.error ?? `liquidation_${res.status}`);
+  return json;
 }
 
 export async function worldRpContext(): Promise<{

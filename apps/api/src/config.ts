@@ -1,6 +1,8 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  ATS_TESTNET,
   BLOCKY402_TESTNET,
   DEFAULT_MANDATE_JSON,
   PINNED_DEPLOYMENTS,
@@ -42,6 +44,11 @@ export type AppConfig = {
   wallBuffer: number;
   evidenceDir: string;
   evidenceTtlMs: number;
+  databaseUrl: string;
+  databaseSsl: boolean;
+  mirrorNodeUrl: string;
+  publicBaseUrl: string;
+  adminToken: string;
   mandateJson: string;
   mandateRequired: boolean;
   meterPerProtocol: string;
@@ -52,10 +59,49 @@ export type AppConfig = {
   worldAction: string;
   worldEnvironment: "staging" | "production";
   worldRequired: boolean;
+  policyCommitmentSalt: string;
+  agent0SubgraphId: string;
+  agent0SubgraphUrl: string;
+  agent0ChainId: string;
+  agent0AgentId: string;
+  agent0Registry: string;
+  mcpPublicUrl: string;
+  registrationImageUrl: string;
+  atsFactoryAddress: string;
+  atsResolverAddress: string;
+  atsRpcUrl: string;
+  atsMirrorNodeUrl: string;
+  atsExplorerUrl: string;
+  atsSdkVersion: string;
+  atsBondConfigId: string;
+  atsBondConfigVersion: number;
+  liquidationRpcUrl: string;
+  liquidationParticipant: string;
+  liquidationWorkflowId: string;
 };
 
 function req(name: string): string {
   return (process.env[name] ?? "").trim();
+}
+
+function resolveCreCli(): string {
+  const explicit = req("CRE_CLI");
+  if (explicit) return explicit;
+  const localApp = process.env.LOCALAPPDATA ?? "";
+  const candidates = [
+    path.join(localApp, "Programs", "cre", "cre.exe"),
+    path.join(localApp, "cre", "cre.exe"),
+    "cre",
+  ];
+  for (const candidate of candidates) {
+    if (candidate === "cre") return candidate;
+    try {
+      if (existsSync(candidate)) return candidate;
+    } catch {
+      /* continue */
+    }
+  }
+  return "cre";
 }
 
 export function loadConfig(): AppConfig {
@@ -94,11 +140,11 @@ export function loadConfig(): AppConfig {
     rateLimitPerMin: Number(process.env.QUERY_RATE_LIMIT_PER_MIN ?? 6),
     hopJoin: req("HOP_JOIN") === "inline" ? "inline" : "cre",
     creCwd: req("CRE_CWD") || path.resolve(here, "../../../cre"),
-    creCli: req("CRE_CLI") || "cre",
+    creCli: resolveCreCli(),
     creEthPrivateKey: req("CRE_ETH_PRIVATE_KEY"),
     creWorkflowId: req("CRE_WORKFLOW_ID"),
     creGatewayUrl: req("CRE_GATEWAY_URL"),
-    demoSign: req("HOP_DEMO_SIGN") === "1",
+    demoSign: req("HOP_DEMO_SIGN") === "1" && process.env.NODE_ENV !== "production",
     demoAccountId: req("HEDERA_DEMO_ACCOUNT_ID"),
     demoPrivateKey: req("HEDERA_DEMO_PRIVATE_KEY"),
     hcsTopic: req("HEDERA_HCS_TOPIC"),
@@ -109,6 +155,11 @@ export function loadConfig(): AppConfig {
     wallBuffer: Number(process.env.WALL_BUFFER ?? 0.2),
     evidenceDir: req("HOP_EVIDENCE_DIR") || path.resolve(here, "../../../data/evidence"),
     evidenceTtlMs: Number(process.env.HOP_EVIDENCE_TTL_MS ?? 72 * 3600 * 1000),
+    databaseUrl: req("DATABASE_URL"),
+    databaseSsl: req("DATABASE_SSL") === "1",
+    mirrorNodeUrl: req("HEDERA_MIRROR_NODE_URL") || "https://testnet.mirrornode.hedera.com",
+    publicBaseUrl: req("HOP_PUBLIC_BASE_URL"),
+    adminToken: req("HOP_ADMIN_TOKEN"),
     mandateJson: req("HOP_MANDATE_JSON") || DEFAULT_MANDATE_JSON,
     mandateRequired: req("HOP_MANDATE_REQUIRED") === "1",
     meterPerProtocol: req("HOP_METER_TINYBARS") || "10000",
@@ -119,6 +170,27 @@ export function loadConfig(): AppConfig {
     worldAction: req("WORLD_ACTION") || "hop-query",
     worldEnvironment: req("WORLD_ENVIRONMENT") === "production" ? "production" : "staging",
     worldRequired: req("WORLD_REQUIRED") === "1",
+    policyCommitmentSalt: req("HOP_POLICY_COMMITMENT_SALT"),
+    agent0SubgraphId: req("AGENT0_SUBGRAPH_ID"),
+    agent0SubgraphUrl: req("AGENT0_SUBGRAPH_URL"),
+    agent0ChainId: req("AGENT0_CHAIN_ID"),
+    agent0AgentId: req("AGENT0_AGENT_ID"),
+    agent0Registry: req("AGENT0_REGISTRY_CAIP"),
+    mcpPublicUrl: req("HOP_MCP_PUBLIC_URL"),
+    registrationImageUrl: req("HOP_REGISTRATION_IMAGE_URL"),
+    atsFactoryAddress: req("ATS_FACTORY_ADDRESS") || ATS_TESTNET.factory,
+    atsResolverAddress: req("ATS_RESOLVER_ADDRESS") || ATS_TESTNET.resolver,
+    atsRpcUrl: req("ATS_RPC_URL") || "https://testnet.hashio.io/api",
+    atsMirrorNodeUrl: req("ATS_MIRROR_NODE_URL") || "https://testnet.mirrornode.hedera.com",
+    atsExplorerUrl: req("ATS_EXPLORER_URL") || "https://hashscan.io/testnet",
+    atsSdkVersion: req("ATS_SDK_VERSION") || ATS_TESTNET.sdkVersion,
+    atsBondConfigId: req("ATS_BOND_CONFIG_ID") || ATS_TESTNET.bondConfigId,
+    atsBondConfigVersion: Number(req("ATS_BOND_CONFIG_VERSION") || 1),
+    liquidationRpcUrl:
+      req("LIQUIDATION_PUBLIC_RPC_URL") ||
+      "https://ethereum-sepolia-rpc.publicnode.com",
+    liquidationParticipant: req("LIQUIDATION_PARTICIPANT_ADDRESS"),
+    liquidationWorkflowId: req("LIQUIDATION_WORKFLOW_ID"),
   };
 }
 

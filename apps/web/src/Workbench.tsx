@@ -214,9 +214,11 @@ function receiptLabel(key: string): string {
       mandate: "Agent budget",
       chain: "Receipt chain",
       freshness: "Data freshness",
-      cre: "Private workflow",
-      cre_report: "Workflow proof",
+      cre: "CRE workflow",
+      cre_report: "Workflow commitment",
       world: "Human proof",
+      schema: "Decision schema",
+      charge: "Charge",
     }[key] ?? key.replaceAll("_", " ")
   );
 }
@@ -225,7 +227,7 @@ const QUERY_LABELS: Record<QueryType, string> = {
   market_params: "Market settings",
   position_counts: "Position count",
   liquidations: "Liquidation count",
-  policy_check: "Private limit check",
+  policy_check: "Policy limit check",
   account_ltv: "Account loan-to-value",
 };
 
@@ -259,6 +261,8 @@ export function Workbench({
   const [worldToken, setWorldToken] = useState("");
   const [settlement, setSettlement] = useState("");
   const [evidenceId, setEvidenceId] = useState("");
+  const [decisionSchema, setDecisionSchema] = useState("");
+  const [chargeLabel, setChargeLabel] = useState("");
   const [meta, setMeta] = useState<Meta | null>(null);
   const [metaStatus, setMetaStatus] = useState<"loading" | "ready" | "error">("loading");
   const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
@@ -377,6 +381,19 @@ export function Workbench({
     return "idle";
   }
 
+  function applyDecision(json: Record<string, unknown>) {
+    const row = json.receipt;
+    if (!row || typeof row !== "object") return;
+    const rec = row as {
+      schema?: string;
+      charge?: { semantics?: string; settled?: boolean };
+      decision?: { status?: string };
+    };
+    if (rec.schema) setDecisionSchema(rec.schema);
+    if (rec.charge?.semantics === "idempotent_replay") setChargeLabel("replay");
+    else if (rec.charge?.settled) setChargeLabel(`attempt · ${rec.decision?.status ?? ""}`.trim());
+  }
+
   function pushTrace(ev: { t: string; rail: string; msg: string }) {
     setTrace((prev) => {
       const next = [...prev, ev];
@@ -402,6 +419,8 @@ export function Workbench({
     setEvidenceJson("");
     setSettlement("");
     setEvidenceId("");
+    setDecisionSchema("");
+    setChargeLabel("");
     setAggregate(undefined);
     const traceId = newTraceId();
     const idem = crypto.randomUUID();
@@ -414,7 +433,8 @@ export function Workbench({
     const world = worldToken || undefined;
     const needHitl =
       (meta?.mandate?.human_threshold_tinybars ?? 0) > 0 ||
-      Number(import.meta.env.VITE_CONFIRM_TINYBARS ?? 0) > 0;
+      Number(import.meta.env.VITE_CONFIRM_TINYBARS ?? 0) > 0 ||
+      Boolean(meta?.demo_sign && !xPayment.trim());
     try {
       const first = await postQuery(body, { traceId, mandate, world });
       applyTrace((first.json.trace as typeof trace) ?? []);
@@ -422,6 +442,7 @@ export function Workbench({
         setStatus(mapStatus(first.status, first.json));
         if (first.json.evidence && !isInvoice(first.json.evidence) && !isInvoice(first.json)) {
           setEvidenceJson(JSON.stringify(first.json.evidence, null, 2));
+          applyDecision(first.json);
           openReceipt = true;
         }
         return;
@@ -470,6 +491,7 @@ export function Workbench({
       if (paid.json.aggregate && typeof paid.json.aggregate === "object") {
         setAggregate(paid.json.aggregate as Record<string, unknown>);
       }
+      applyDecision(paid.json);
       const ev = paid.json.evidence as {
         id?: string;
         settlement?: { ref?: string };
@@ -551,12 +573,12 @@ export function Workbench({
   const evidenceLines = receiptRows(evidenceJson);
   const sourceStatus =
     metaStatus === "loading"
-      ? "Loading live sources"
+      ? "Loading source config"
       : metaStatus === "error"
         ? "Source status unavailable"
         : meta?.graph_ready
-          ? "Live sources ready"
-          : "Live source needs setup";
+          ? "Sources configured"
+          : "Source setup required";
   const sourceStatusClass =
     metaStatus === "error" ? "error" : meta?.graph_ready ? "ready" : "loading";
   const joinStatus =
@@ -600,7 +622,7 @@ export function Workbench({
       <nav className="app-trust" aria-label="what powers this check">
         <span className={rails.graph ? "on" : ""}>Market data</span>
         <span className={rails.hedera ? "on" : ""}>Payment</span>
-        <span className={rails.cre ? "on" : ""}>Private check</span>
+        <span className={rails.cre ? "on" : ""}>CRE check</span>
         <span className={rails.world ? "on" : ""}>Human proof</span>
       </nav>
     ) : (
@@ -944,16 +966,6 @@ export function Workbench({
             </small>
           </a>
           {flags}
-          <a
-            className="app-link"
-            href="/desk"
-            onClick={(e) => {
-              e.preventDefault();
-              navigate("/desk");
-            }}
-          >
-            Desk
-          </a>
         </header>
 
         <div className="app-work">
@@ -1029,7 +1041,7 @@ export function Workbench({
                 <span className={`app-context-status ${sourceStatusClass}`}>{sourceStatus}</span>
                 <span className={`app-context-status ${joinStatusClass}`}>{joinStatus}</span>
                 <span>Sources: {sourceLabel(protocolList)}</span>
-                <span>Private limit protected</span>
+                <span>Policy values omitted</span>
                 <span>Freshness: {maxBlockLag} blocks</span>
                 <button
                   type="button"
@@ -1147,7 +1159,7 @@ export function Workbench({
                     Public signal: {observed}
                   </span>
                 ) : (
-                  <span>Private limit protected</span>
+                  <span>Policy values omitted</span>
                 )}
                 {settlement ? (
                   <span>
@@ -1390,12 +1402,20 @@ export function Workbench({
                       className="app-ghost"
                       onClick={() => {
                         void (async () => {
-                          const pack = await getVerify(evidenceId);
-                          pushTrace({
-                            t: new Date().toISOString(),
-                            rail: "hop",
-                            msg: `verify ${JSON.stringify(pack)}`,
-                          });
+                          try {
+                            const pack = await getVerify(evidenceId);
+                            pushTrace({
+                              t: new Date().toISOString(),
+                              rail: "hop",
+                              msg: `verify ${JSON.stringify(pack)}`,
+                            });
+                          } catch (error) {
+                            pushTrace({
+                              t: new Date().toISOString(),
+                              rail: "hop",
+                              msg: error instanceof Error ? error.message : "verify_failed",
+                            });
+                          }
                         })();
                       }}
                     >
@@ -1412,6 +1432,18 @@ export function Workbench({
               {drawerOpen ? (
                 evidenceLines.length ? (
                   <dl className="app-dl">
+                    {decisionSchema ? (
+                      <div>
+                        <dt>Decision schema</dt>
+                        <dd>{decisionSchema}</dd>
+                      </div>
+                    ) : null}
+                    {chargeLabel ? (
+                      <div>
+                        <dt>Charge</dt>
+                        <dd>{chargeLabel}</dd>
+                      </div>
+                    ) : null}
                     {evidenceLines.map((row) => (
                       <div key={`${row.k}-${row.v}`}>
                         <dt>{receiptLabel(row.k)}</dt>

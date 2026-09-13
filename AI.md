@@ -1,7 +1,9 @@
 # AI use
 
-AI use: Cursor agents implemented Hop from local product spec (`docs/07`, `docs/09`) and later mandate/PEAC/HCS work from `docs/05` / `docs/11`.
+Hop’s implementation was produced in Cursor from a local product specification. Humans locked the product, environment variables, testnet funding, and operational runs.
 
-Humans: product lock, prize selection (The Graph, Hedera, Chainlink), `.env`, faucet, demo recording, submission.
+Hop contains no model runtime. Natural-language mapping is the caller agent’s job (`skills/hop-query/SKILL.md`, MCP, OpenAPI).
 
-No copied `ic3-26` / Prova / Scipio source. No Continuity track.
+No Continuity submission. No copied product source from other repositories.
+
+Technical reference: [`documentation/README.md`](documentation/README.md).

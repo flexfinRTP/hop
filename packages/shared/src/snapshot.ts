@@ -31,6 +31,7 @@ type GraphEnvelope<T> = {
 
 type SnapshotData = {
   _meta?: {
+    deployment?: string;
     block?: { number?: number; timestamp?: number };
     hasIndexingErrors?: boolean;
   };
@@ -38,6 +39,7 @@ type SnapshotData = {
     slug?: string;
     schemaVersion?: string;
     subgraphVersion?: string;
+    methodologyVersion?: string;
     totalValueLockedUSD?: string;
     totalBorrowBalanceUSD?: string;
     totalDepositBalanceUSD?: string;
@@ -124,18 +126,21 @@ function windowUnix(request: QueryRequest): { from: number; to: number } {
 }
 
 function toSnapshot(
-  args: { slug: string; url: string; deploymentId: string; chainHead?: number },
+  args: { slug: string; url: string; subgraphId: string; chainHead?: number },
   data: SnapshotData,
   positions: GraphPosition[],
   liquidates: GraphLiquidate[],
 ): ProtocolSnapshot {
   const proto = data.lendingProtocols?.[0];
+  const subgraphId = args.subgraphId;
   return {
     slug: proto?.slug ?? args.slug,
     url: args.url,
-    deploymentId: args.deploymentId,
+    subgraphId,
+    deploymentId: data._meta?.deployment,
     schemaVersion: proto?.schemaVersion ?? "unknown",
     subgraphVersion: proto?.subgraphVersion,
+    methodologyVersion: proto?.methodologyVersion,
     block: data._meta?.block?.number,
     blockTimestamp: data._meta?.block?.timestamp,
     chainHead: args.chainHead,
@@ -215,7 +220,7 @@ function liquidatesSync(
     );
     const batch = rows.liquidates ?? [];
     out.push(...batch);
-    if (batch.length < 1000) break;
+    if (batch.length < 200) break;
   }
   return out;
 }
@@ -238,7 +243,7 @@ async function liquidatesAsync(
     );
     const batch = rows.liquidates ?? [];
     out.push(...batch);
-    if (batch.length < 1000) break;
+    if (batch.length < 200) break;
   }
   return out;
 }
@@ -246,12 +251,18 @@ async function liquidatesAsync(
 type FetchArgs = {
   slug: string;
   url: string;
-  deploymentId: string;
+  subgraphId?: string;
+  /** @deprecated use subgraphId */
+  deploymentId?: string;
   authHeaders: Record<string, string>;
   request: QueryRequest;
   chainHead?: number;
   policy?: PolicyTable | null;
 };
+
+function sourceId(args: FetchArgs): string {
+  return args.subgraphId || args.deploymentId || "";
+}
 
 function marketsSync(http: GraphHttp, url: string, headers: Record<string, string>): GraphMarket[] {
   const out: GraphMarket[] = [];
@@ -284,7 +295,7 @@ export function fetchProtocolSnapshotSync(http: GraphHttp, args: FetchArgs): Pro
   const data = graphqlSync<SnapshotData>(http, args.url, PROTOCOL_QUERY, {}, args.authHeaders);
   const { from, to } = windowUnix(args.request);
   const snap = toSnapshot(
-    args,
+    { slug: args.slug, url: args.url, subgraphId: sourceId(args), chainHead: args.chainHead },
     data,
     needs.positions ? positionsSync(http, args.url, args.authHeaders) : [],
     needs.liquidates ? liquidatesSync(http, args.url, args.authHeaders, from, to) : [],
@@ -298,7 +309,7 @@ export async function fetchProtocolSnapshot(http: GraphHttp, args: FetchArgs): P
   const data = await graphqlAsync<SnapshotData>(http, args.url, PROTOCOL_QUERY, {}, args.authHeaders);
   const { from, to } = windowUnix(args.request);
   const snap = toSnapshot(
-    args,
+    { slug: args.slug, url: args.url, subgraphId: sourceId(args), chainHead: args.chainHead },
     data,
     needs.positions ? await positionsAsync(http, args.url, args.authHeaders) : [],
     needs.liquidates ? await liquidatesAsync(http, args.url, args.authHeaders, from, to) : [],

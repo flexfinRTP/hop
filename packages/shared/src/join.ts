@@ -2,6 +2,8 @@ import { metricHash, sanitizeAggregate } from "./egress.js";
 import { compare, thresholdHash } from "./policy.js";
 import {
   K_ANON,
+  MESSARI_SCHEMA,
+  type GraphMarket,
   type HopJoinResult,
   type HopSnapshot,
   type PolicyCap,
@@ -93,6 +95,19 @@ function observedForCap(cap: PolicyCap, snapshot: HopSnapshot): number | null {
   }
 }
 
+function sampleBorrowVariableRate(markets: GraphMarket[]): number | null {
+  for (const market of markets) {
+    const row = market.rates?.find(
+      (rate) => rate.side === "BORROWER" && rate.type === "VARIABLE" && rate.rate,
+    );
+    if (row?.rate) {
+      const value = Number(row.rate);
+      if (Number.isFinite(value)) return value;
+    }
+  }
+  return null;
+}
+
 function marketParams(snapshot: HopSnapshot): Record<string, unknown> {
   return {
     protocols: snapshot.protocols.map((p) => {
@@ -104,14 +119,19 @@ function marketParams(snapshot: HopSnapshot): Record<string, unknown> {
       }
       return {
         slug: p.slug,
+        subgraphId: p.subgraphId ?? p.deploymentId,
         schemaVersion: p.schemaVersion,
+        subgraphVersion: p.subgraphVersion,
+        methodologyVersion: p.methodologyVersion,
         block: p.block,
+        blockTimestamp: p.blockTimestamp,
         market_count: p.markets.length,
         tvl_usd: p.protocolTvlUsd,
         borrow_usd: p.protocolBorrowUsd,
         deposit_usd: p.protocolDepositUsd,
         utilization: util,
         max_ltv_param_histogram: histogram,
+        borrow_variable_rate: sampleBorrowVariableRate(p.markets),
       };
     }),
   };
@@ -204,27 +224,27 @@ function accountLtv(snapshot: HopSnapshot, k: number): {
 function policyCheck(
   snapshot: HopSnapshot,
   policy: PolicyTable,
-): { breached: boolean; metric: string; observed: number } {
+): { breached: boolean; metric: string; observed: number } | null {
   for (const cap of policy.caps) {
     const observed = observedForCap(cap, snapshot);
-    if (observed === null) continue;
+    if (observed === null) return null;
     if (compare(cap.op, observed, cap.value)) {
       return { breached: true, metric: cap.metric, observed };
     }
   }
   const first = policy.caps[0];
-  const observed = observedForCap(first, snapshot) ?? 0;
+  const observed = observedForCap(first, snapshot);
+  if (observed === null) return null;
   return { breached: false, metric: first.metric, observed };
 }
 
 export function maxLag(snapshot: HopSnapshot): number {
   const head = snapshot.chainHead;
-  if (!head) return 0;
+  if (!head || snapshot.protocols.length === 0) return Number.POSITIVE_INFINITY;
   let lag = 0;
   for (const p of snapshot.protocols) {
-    if (typeof p.block === "number") {
-      lag = Math.max(lag, Math.abs(head - p.block));
-    }
+    if (typeof p.block !== "number") return Number.POSITIVE_INFINITY;
+    lag = Math.max(lag, Math.abs(head - p.block));
   }
   return lag;
 }
@@ -233,21 +253,47 @@ export function joinAndAggregate(
   policy: PolicyTable,
   snapshot: HopSnapshot,
   request: QueryRequest,
+  policyCommitmentKey?: string,
 ): HopJoinResult {
   const graph = {
-    deployments: snapshot.protocols.map((p) => ({
-      id: p.deploymentId,
-      slug: p.slug,
-      schemaVersion: p.schemaVersion,
-      subgraphVersion: p.subgraphVersion,
-      block: p.block,
-      blockTimestamp: p.blockTimestamp,
-    })),
+    deployments: snapshot.protocols.map((p) => {
+      const subgraphId = p.subgraphId;
+      return {
+        id: subgraphId,
+        subgraphId,
+        deploymentId: p.deploymentId,
+        slug: p.slug,
+        schemaVersion: p.schemaVersion,
+        subgraphVersion: p.subgraphVersion,
+        methodologyVersion: p.methodologyVersion,
+        block: p.block,
+        blockTimestamp: p.blockTimestamp,
+      };
+    }),
   };
   const policyMeta = {
     version: policy.version,
-    threshold_hash: thresholdHash(policy),
+    threshold_hash: thresholdHash(policy, policyCommitmentKey),
   };
+
+  const requestedCount = new Set(request.protocols).size;
+  if (
+    snapshot.protocols.length !== requestedCount ||
+    snapshot.protocols.some(
+      (protocol) =>
+        protocol.hasIndexingErrors === true ||
+        protocol.schemaVersion !== MESSARI_SCHEMA ||
+        !protocol.methodologyVersion ||
+        typeof protocol.blockTimestamp !== "number",
+    )
+  ) {
+    return {
+      status: "stale",
+      k_anon: { result: "not_applicable" },
+      graph,
+      policy: policyMeta,
+    };
+  }
 
   const lag = maxLag(snapshot);
   if (lag > request.max_block_lag) {
@@ -283,6 +329,14 @@ export function joinAndAggregate(
       break;
     case "policy_check": {
       const check = policyCheck(snapshot, policy);
+      if (!check) {
+        return {
+          status: "stale",
+          k_anon: { result: "not_applicable" },
+          graph,
+          policy: policyMeta,
+        };
+      }
       aggregate = {
         breached: check.breached,
         metric_hash: metricHash(check.metric),
@@ -309,5 +363,17 @@ export function joinAndAggregate(
 }
 
 export function dropAccountIds<T>(value: T): T {
-  return value;
+  if (Array.isArray(value)) {
+    return value.map((item) => dropAccountIds(item)) as T;
+  }
+  if (!value || typeof value !== "object") return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    const normalized = key.replace(/[-_\s]/g, "").toLowerCase();
+    if (normalized === "account" || normalized === "accountid" || normalized === "accounts") {
+      continue;
+    }
+    out[key] = dropAccountIds(item);
+  }
+  return out as T;
 }

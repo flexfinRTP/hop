@@ -1,0 +1,20 @@
+{
+  "schedule": "*/10 * * * * *",
+  "chain_id": 11155111,
+  "lending_address": "0x88574e7Cc0027afd04951daa09B64d4441931ba1",
+  "veth_address": "0x5dED1a40c3D56dA42E7f932f781c0432556c9814",
+  "vusd_address": "0x6Fe92Ead5299040f50F095860b5A0A7A2D4041A2",
+  "secrets_ids": {
+    "rpc_url": "liquidation_rpc_url",
+    "private_key": "liquidation_private_key",
+    "min_hf_trigger": "liquidation_min_hf_trigger",
+    "target_hf": "liquidation_target_hf",
+    "max_repay_pct": "liquidation_max_repay_pct",
+    "max_deposit_units": "liquidation_max_deposit_units",
+    "action_priority": "liquidation_action_priority",
+    "safety_margin": "liquidation_safety_margin",
+    "cooldown_seconds": "liquidation_cooldown_seconds",
+    "emergency_hf": "liquidation_emergency_hf",
+    "commitment_salt": "liquidation_commitment_salt"
+  }
+}

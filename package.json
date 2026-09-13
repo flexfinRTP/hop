@@ -6,7 +6,8 @@
     "packages/shared",
     "apps/api",
     "apps/web",
-    "apps/mcp"
+    "apps/mcp",
+    "apps/harness"
   ],
   "scripts": {
     "setup:local": "node scripts/bootstrap-local.mjs",
@@ -14,7 +15,8 @@
     "setup:check": "node scripts/check-ready.mjs",
     "dev:api": "npm run dev -w @hop/api",
     "dev:web": "npm run dev -w @hop/web",
-    "mcp": "npm start -w @hop/mcp"
+    "mcp": "npm start -w @hop/mcp",
+    "harness": "npm start -w @hop/hedera-lifecycle-harness"
   },
   "engines": {
     "node": ">=20"

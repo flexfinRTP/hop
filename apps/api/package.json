@@ -16,10 +16,12 @@
     "@x402/hedera": "^2.2.0",
     "dotenv": "^16.6.0",
     "hono": "^4.9.0",
+    "pg": "^8.16.3",
     "viem": "^2.56.3"
   },
   "devDependencies": {
     "@types/node": "^22.18.0",
+    "@types/pg": "^8.15.5",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
   }

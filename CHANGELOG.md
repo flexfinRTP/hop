@@ -4,9 +4,265 @@ Versions increment by `0.0.x` per feature. No dates.
 
 ## Roadmap
 
-Code complete through **0.0.17**. Phase D (0.0.18) is the remaining path: prize take then commercial. Local spec: `docs/11-phase-d-roadmap.md`.
+Code complete through **0.0.76**. Public product is **verifiable decision infrastructure for agents** (finance lending policy gate as the demo vertical). Agent DX: `/docs` hub with rendered SKILL/llms + hosted Swagger; agents still fetch `/llms.txt`, `/openapi.yaml`, `/SKILL.md`. Remaining work is operator tape ([`documentation/operator.md`](documentation/operator.md)): CRE login, restart API, one paid hop, optional ATS + Sepolia.
+
+Operator activation still requires funded testnet accounts, live Graph/CRE credentials, one paid hop on tape, and (for extra tracks) an ATS wallet lifecycle plus Sepolia `join()`. See [`documentation/README.md`](documentation/README.md).
 
 Local test bootstrap is **0.0.19** (`npm run setup:local`). Still needs you: Hedera faucet + Graph Studio API key.
+
+## 0.0.76
+
+### Removed
+
+- `/app` Decision room: `FINANCE DEMO` eyebrow.
+
+### Next
+
+- You: `cre login`, restart API, one paid `/app` hop, video. ATS and Sepolia are extra.
+
+## 0.0.75
+
+### Changed
+
+- `/app` muted labels use darker sage so gray text stays readable on cream.
+
+### Next
+
+- You: `cre login`, restart API, one paid `/app` hop, video. ATS and Sepolia are extra.
+
+## 0.0.74
+
+### Changed
+
+- `/app`: removed breadcrumb topbar and CONFIG LOADED. Testnet label sits in the page head. Charcoal stat strip is cream panel. Less top padding.
+
+### Next
+
+- You: `cre login`, restart API, one paid `/app` hop, video. ATS and Sepolia are extra.
+
+## 0.0.73
+
+### Removed
+
+- Public `/desk` bunny night-desk page and its nav links. Old `/desk` URLs go to `/app`. Decision room at `/app` is unchanged.
+
+### Next
+
+- You: `cre login`, restart API, one paid `/app` hop, video. ATS and Sepolia are extra.
+
+## 0.0.72
+
+### Changed
+
+- `/` proof stack uses downloaded official marks: The Graph GRT, Chainlink hex, Hedera H.
+
+### Next
+
+- You: `cre login`, restart API, one paid `/app` hop, video. ATS and Sepolia are extra.
+
+## 0.0.71
+
+### Added
+
+- `/` proof stack (“Every rail has one job.”): Graph, Chainlink, and Hedera marks on each rail.
+
+### Next
+
+- You: `cre login`, restart API, one paid `/app` hop, video. ATS and Sepolia are extra.
+
+## 0.0.70
+
+### Added
+
+- `/docs` marketing docs hub with sidebar, file cards, Swagger, and rendered articles. SKILL and llms.txt have human pages (`/docs/skill`, `/docs/llms`); agents still fetch `/SKILL.md` and `/llms.txt`.
+- Dedicated `docs.css` so launch palette edits cannot drop the docs layout.
+
+### Next
+
+- You: `cre login`, restart API, one paid `/app` hop, video. ATS and Sepolia are extra.
+
+## 0.0.69
+
+### Changed
+
+- `/app` decision room uses the marketing palette: cream ground (`#f3ede0`), eucalyptus (`#4c7a6b`), terracotta live accent (`#c96b4a`). CSS tokens and hardcoded ops colors only; no layout or TSX changes.
+
+### Next
+
+- Optional: match `/assets` and `/desk` to the same palette after `/app` preview.
+
+## 0.0.68
+
+### Changed
+
+- `/` marketing page: cream ground (`#f3ede0`), eucalyptus secondary (`#4c7a6b`), terracotta accent (`#c96b4a`). `/app`, `/desk`, and `/assets` keep the previous dark mint palette until approved.
+
+### Next
+
+- Apply the cream / sage / terracotta palette to `/app` after marketing preview.
+
+## 0.0.67
+
+### Added
+
+- `GET /v1/evidence/{id}/verify` returns `tiers` (recomputed, settlement, HCS, CRE sim, CRE DON), `ok_means`, `cre_ok_means`, `hcs_present`. `cre_don_verified` is always false until a matched DON result exists.
+- `/app` vault chips: HASHES / SETTLEMENT / HCS / CRE SIM / DON —. DON is never green. HCS shows SKIP when no sequence.
+- Operator activation: [`documentation/operator.md`](documentation/operator.md).
+
+### Next
+
+- You: `cre login`, restart API, one paid `/app` hop, video. ATS and Sepolia are extra.
+
+## 0.0.66
+
+### Changed
+
+- `/` and `/app` copy: verifiable decision infrastructure for agents. Private policy / public settlement / verifiable evidence. Finance is the demo vertical, not the market.
+- `/app` pipeline: CRE confidential workflow (SIM unless `cre.mode` is don); standardized Graph join; HCS labeled optional until `hcs_seq` exists.
+- Desk labels: CRE check / policy values omitted. Kept desk layout and “Private rules. Clear decisions. Built for agents.”
+- README, docs index, OpenAPI, SKILL, MCP, Agent Card: decision infrastructure wording. Settlement remains public Hedera x402. Policy values omitted.
+- Evidence docs: Mirror Node verify, `cre_commitment_hash`, `ok` does not mean DON-verified.
+- Implementation plan is now the executable remaining-work spec (Phases B–H).
+
+### Next
+
+- Phase B: verification tiers on `GET /v1/evidence/{id}/verify` and `/app` vault chips (HASHES / SETTLEMENT / HCS / CRE SIM / CRE DON).
+- Operator: one paid CRE `policy_check` on HashScan.
+
+## 0.0.65
+
+### Changed
+
+- Intended `/` launch copy for verifiable decision infrastructure. Source landing was still the prior pitch until 0.0.66 applied it.
+
+### Added
+
+- First implementation plan: [`documentation/product-implementation-plan.md`](documentation/product-implementation-plan.md). No API or `/app` code in this version.
+
+## 0.0.64
+
+### Added
+
+- Official ATS v8 testnet factory `0.0.9213391`, resolver `0.0.9212226`, and bond config id as defaults. Browser client resolves `configVersion` via `Management.resolveLatestConfigVersion`.
+- Full ATS follow-on actions on a verified parent: coupon, pause, unpause, `Bond.fullRedeemAtMaturity`. Optional internal KYC uses a caller-supplied Base64 VC (no fabricated credential).
+- Mirror ATS verifier and harness now retry 404s, require factory `created_contract_ids`, and record contract logs.
+- `/app` infrastructure shows live ATS intent counts and official Sepolia ChallengeLending status. The old simulated WALL view is removed.
+- API file-store boot no longer requires `pg` to be loaded. Postgres still activates when `DATABASE_URL` is set.
+
+### Next
+
+- Operator: one paid CRE `policy_check`, one wallet-signed ATS lifecycle on HashScan, one Sepolia `join()` + `cre workflow simulate liquidation-protection`.
+
+## 0.0.63
+
+### Added
+
+- `/v1/assets` intent, ATS configuration, transaction submission, Mirror Node verification, evidence linkage, and HCS lifecycle anchoring.
+- `/assets` browser-wallet workspace using `@hashgraph/asset-tokenization-sdk` 8.0.0 for bond creation, multi-role assignment, allowlist controls, issuance, transfer-and-lock, and optional coupon creation.
+- `@hop/hedera-lifecycle-harness`: declarative YAML/JSON verification for Hedera transfers, contract results, HCS messages, and mandatory ATS lifecycle stages.
+- PostgreSQL and file persistence for ATS intents.
+
+### Safety
+
+- ATS mutations require explicit browser-wallet approval; the API never holds an ATS wallet key.
+- Asset intent creation requires an accepted Hop decision and externally verified Hedera x402 settlement.
+- UI and evidence label the instrument as testnet-only with no investment rights.
+
+## 0.0.62
+
+### Added
+
+- Optional PostgreSQL evidence and request-claim store with migrations, unique idempotency/payment constraints, settlement states, HCS outbox, and file-mode fallback.
+- Hedera Mirror Node verification for payer, payee, exact amount, transaction result, HCS topic, sequence, and anchored payload.
+- Autonomous `hop_pay` MCP buyer with local-only payer key custody, quote/mandate validation, exact Hedera signing, idempotent retry, and evidence verification.
+- Agent0 standardized Subgraph discovery routes, ERC-8004 registration metadata, and an official Subgraph MCP + Hop MCP Cursor configuration example.
+- CRE authenticated readiness gate using `cre whoami`.
+
+### Corrected
+
+- Graph evidence now stores the immutable `_meta.deployment` separately from the logical Subgraph ID and fails closed on `_meta.hasIndexingErrors`.
+- Confidential policy commitments can use a TEE-only commitment salt; CRE requires `POLICY_COMMITMENT_SALT`.
+- CRE evidence uses `cre_commitment_hash`; raw CLI tails are no longer persisted as artifacts.
+- Concurrent mandate rollback releases its named reservation instead of whichever hop was appended last.
+- HCS anchors retain their topic ID and failed submissions enter a durable retry outbox.
+- Demo signing is disabled whenever `NODE_ENV=production`.
+
+## 0.0.61
+
+### Added
+
+- Public technical reference under `documentation/` (architecture, Hedera x402, standardized Graph, CRE, agents, evidence). README, `llms.txt`, SKILL, and OpenAPI point at it.
+- `GET /.well-known/agent-card.json` A2A Agent Card (discovery). Vite proxies `/.well-known` to the API.
+- Messari `InterestRate` (`side`, `type`, `rate`) on `HopMarkets`; `market_params` returns `borrow_variable_rate`.
+- Graph `_meta.deployment` and `hasIndexingErrors` on the protocol query. Evidence stores `subgraphId` (Gateway id) and `deploymentId` (`_meta.deployment`).
+- `/v1/meta` exposes `mcp_tools`, `agent_card`, and `documentation`. Infrastructure view shows protocol-count meter and Agent Card path.
+
+### Changed
+
+- OpenAPI `0.0.61`. Graph deployment objects require `subgraphId`.
+- Agent skill includes a complete Hedera exact 402 retry example.
+
+### Removed
+
+- Root `PRIZES.md`. Integration and operator material lives in `documentation/`.
+
+## 0.0.60
+
+### Added
+
+- Prize-track mapping draft (replaced in 0.0.61 by `documentation/`).
+
+### Next
+
+- Operator: one settled `policy_check` with live Graph provenance, CRE simulation artifact, HashScan, and HCS.
+
+## 0.0.59
+
+### Corrected
+
+- CRE now scopes Graph calls to exactly the requested protocols and returns a SHA-256 commitment hash instead of mislabeled base64 payload bytes.
+- Shared canonical hashing now uses a runtime-portable synchronous SHA-256 implementation, removing the Node crypto dependency from CRE WASM compilation.
+- A configured DON trigger no longer relabels a local simulation result as a DON result; execution IDs remain attached without overstating provenance.
+- API-triggered CRE simulations are serialized and use an ignored generated config target, avoiding concurrent request cross-contamination and tracked runtime-config rewrites.
+- Selected Graph sources are all required. Partial protocol success, indexing errors, missing chain head, missing deployment blocks, or unevaluable policy metrics now fail closed as `stale`.
+- Liquidation pagination now uses the actual 200-row page size.
+- Graph evidence now distinguishes `subgraphId` and records Messari `methodologyVersion` plus `_meta.block.timestamp`.
+- Aggregate sanitization recursively removes policy, threshold, metric, account, and address-bearing fields.
+- Concurrent requests now claim both idempotency keys and payment payloads before settlement, preventing duplicate in-flight settlement in one API process.
+- Demo signing only accepts an exact, short-lived requirement previously issued by this API.
+- `WORLD_REQUIRED=1` with incomplete World configuration now fails before payment.
+- Evidence verification now recomputes aggregate, chain link, predecessor, PEAC, and CRE commitment checks. CRE validity participates in overall `ok`; external settlement/HCS verification remains explicitly false.
+- PEAC hashes are generated after optional HCS sequence assignment.
+- `/app` and `/desk` require explicit approval before using the server demo signer.
+- UI and health metadata distinguish configured rails, simulations, and DON triggers from verified live dependency health or DON results.
+- `/app` VERIFY HASHES reports on the button and a visible hash-check banner after a run. The previous result sat below the fold, so the control looked inert.
+
+### Changed
+
+- API-run CRE uses the new `api-settings` target and `config.runtime.generated.json`; manual `staging-settings` remains unchanged.
+- OpenAPI version is `0.0.59` with payment headers, concurrency response, World configuration error, and accurate CRE commitment semantics.
+- README documents the simulator launcher’s policy visibility and the boundary between DON trigger acceptance and verified DON output.
+
+## 0.0.58
+
+### Added
+
+- `/app`: enterprise decision gateway with Decision Room, Evidence Vault, and Infrastructure views.
+- Decision Room: live five-stage mandate/payment/private-compute/data/evidence pipeline driven by real trace and receipt state.
+- Evidence Vault: recent persisted decisions, evidence inspection, PEAC export, hash verification, Graph deployment proof, and HashScan links.
+- API: `GET /v1/evidence?limit=50` for newest-first public evidence packs.
+- `/`: focused launch interface for the confidential autonomous-capital risk gateway.
+
+### Changed
+
+- Narrowed the primary UI from generic prompt patterns to the real lending-risk product: a private utilization policy across Aave v3 and Compound v3.
+- Made The Graph standardization, Chainlink `handlerInTee`, Hedera Blocky402 settlement, mandates, and HCS evidence visible as distinct proof stages.
+- Preserved the original night desk at `/desk`, all supported query types, manual `X-PAYMENT`, World ID, voice controls, WALL, MCP, SKILL, and receipt exports.
+- OpenAPI version is now `0.0.58` and documents the evidence collection route.
+
+### Verified
+
+- Production builds complete for `@hop/web` and `@hop/api`.
 
 ## 0.0.55
 

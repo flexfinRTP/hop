@@ -56,10 +56,27 @@ export async function submitReceiptHash(
     mandate_hash?: string;
     chain_hash?: string;
     policy_hash?: string;
-    cre_report_hash?: string;
+    cre_commitment_hash?: string;
     world_hash?: string;
   },
-): Promise<number | undefined> {
+): Promise<{ sequence: number; topic: string } | undefined> {
+  return submitHcsJson(cfg, {
+    type: "hop.receipt.v1",
+    id: evidenceId,
+    aggregate_hash: aggregateHash,
+    settlement: settlementRef,
+    mandate_hash: extra?.mandate_hash,
+    chain_hash: extra?.chain_hash,
+    policy_hash: extra?.policy_hash,
+    cre_commitment_hash: extra?.cre_commitment_hash,
+    world_hash: extra?.world_hash,
+  });
+}
+
+export async function submitHcsJson(
+  cfg: AppConfig,
+  message: Record<string, unknown>,
+): Promise<{ sequence: number; topic: string } | undefined> {
   if (!cfg.hederaOperatorId || !cfg.hederaOperatorKey) return undefined;
   const topic = await resolveTopic(cfg);
   if (!topic) return undefined;
@@ -73,22 +90,11 @@ export async function submitReceiptHash(
   try {
     const tx = await new sdk.TopicMessageSubmitTransaction()
       .setTopicId(topic)
-      .setMessage(
-        JSON.stringify({
-          id: evidenceId,
-          aggregate_hash: aggregateHash,
-          settlement: settlementRef,
-          mandate_hash: extra?.mandate_hash,
-          chain_hash: extra?.chain_hash,
-          policy_hash: extra?.policy_hash,
-          cre_report_hash: extra?.cre_report_hash,
-          world_hash: extra?.world_hash,
-        }),
-      )
+      .setMessage(JSON.stringify(message))
       .execute(client);
     const receipt = await tx.getReceipt(client);
     const seq = receipt.topicSequenceNumber;
-    return seq !== undefined ? Number(seq) : undefined;
+    return seq !== undefined ? { sequence: Number(seq), topic } : undefined;
   } finally {
     client.close();
   }

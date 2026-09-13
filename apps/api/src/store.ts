@@ -1,7 +1,34 @@
 import { mkdir, readFile, readdir, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { hashJson, type Evidence, type MandateSpend, type TraceEvent } from "@hop/shared";
+import {
+  hashJson,
+  type Evidence,
+  type MandateSpend,
+  type PaymentRequirements,
+  type TraceEvent,
+} from "@hop/shared";
+import {
+  claimDurableRequest,
+  completeHcsOutbox,
+  databaseReady,
+  enqueueHcsEvidence,
+  initDatabase,
+  loadDurableEvidence,
+  persistDurableEvidence,
+  releaseDurableClaim,
+  takeHcsOutbox,
+  updateDurableClaim,
+} from "./database.js";
+
+export {
+  claimDurableRequest,
+  completeHcsOutbox,
+  enqueueHcsEvidence,
+  releaseDurableClaim,
+  takeHcsOutbox,
+  updateDurableClaim,
+};
 
 export type StoredEvidence = {
   id: string;
@@ -20,6 +47,12 @@ const byPayment = new Map<string, string>();
 const traces = new Map<string, TraceEvent[]>();
 const listeners = new Map<string, Set<(ev: TraceEvent) => void>>();
 const mandateSpend = new Map<string, MandateSpend>();
+const idempotencyInFlight = new Map<
+  string,
+  { bodyHash: string; wait: Promise<void>; release: () => void }
+>();
+const paymentInFlight = new Map<string, string>();
+const demoQuotes = new Map<string, { expiresAt: number; count: number }>();
 
 let dir = "";
 let ttlMs = 72 * 3600 * 1000;
@@ -35,7 +68,12 @@ export function isId(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
 }
 
-export async function initStore(evidenceDir: string, evidenceTtlMs: number): Promise<void> {
+export async function initStore(
+  evidenceDir: string,
+  evidenceTtlMs: number,
+  databaseUrl = "",
+  databaseSsl = false,
+): Promise<void> {
   dir = evidenceDir;
   ttlMs = evidenceTtlMs;
   await mkdir(dir, { recursive: true });
@@ -56,8 +94,26 @@ export async function initStore(evidenceDir: string, evidenceTtlMs: number): Pro
       continue;
     }
   }
+  if (databaseUrl) {
+    await initDatabase(databaseUrl, { ssl: databaseSsl });
+    const durable = await loadDurableEvidence(ttlMs);
+    for (const item of durable) {
+      if (!item || typeof item !== "object") continue;
+      try {
+        remember(item as StoredEvidence);
+      } catch {
+        continue;
+      }
+    }
+  }
   persistReady = true;
   await loadMandates();
+}
+
+export function storeHealth(): { mode: "postgres" | "file"; durable: boolean } {
+  return databaseReady()
+    ? { mode: "postgres", durable: true }
+    : { mode: "file", durable: false };
 }
 
 function remember(row: StoredEvidence): void {
@@ -76,9 +132,71 @@ export function getById(id: string): StoredEvidence | undefined {
   return byId.get(id);
 }
 
+export function listEvidence(limit = 50): Evidence[] {
+  const safeLimit = Math.max(1, Math.min(100, Math.trunc(limit)));
+  return [...byId.values()]
+    .sort((a, b) => b.storedAt - a.storedAt)
+    .slice(0, safeLimit)
+    .map((row) => row.json);
+}
+
 export function getByIdempotency(key: string): StoredEvidence | undefined {
   const id = byIdempotency.get(key);
   return id ? byId.get(id) : undefined;
+}
+
+export function claimIdempotency(
+  key: string,
+  bodyHash: string,
+):
+  | { status: "acquired" }
+  | { status: "conflict" }
+  | { status: "pending"; wait: Promise<void> } {
+  const current = idempotencyInFlight.get(key);
+  if (current) {
+    return current.bodyHash === bodyHash
+      ? { status: "pending", wait: current.wait }
+      : { status: "conflict" };
+  }
+  let release!: () => void;
+  const wait = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  idempotencyInFlight.set(key, { bodyHash, wait, release });
+  return { status: "acquired" };
+}
+
+export function releaseIdempotency(key: string): void {
+  const current = idempotencyInFlight.get(key);
+  if (!current) return;
+  idempotencyInFlight.delete(key);
+  current.release();
+}
+
+export function hasEvidenceChainHash(hash: string): boolean {
+  if (hash === "0".repeat(64)) return true;
+  return [...byId.values()].some((row) => row.json.chain?.hash === hash);
+}
+
+export function rememberDemoQuote(requirement: PaymentRequirements, ttlMs = 120_000): void {
+  const key = hashJson(requirement);
+  const current = demoQuotes.get(key);
+  demoQuotes.set(key, {
+    expiresAt: Date.now() + ttlMs,
+    count: (current?.expiresAt ?? 0) > Date.now() ? current!.count + 1 : 1,
+  });
+}
+
+export function consumeDemoQuote(requirement: PaymentRequirements): boolean {
+  const key = hashJson(requirement);
+  const current = demoQuotes.get(key);
+  if (!current || current.expiresAt < Date.now() || current.count < 1) {
+    demoQuotes.delete(key);
+    return false;
+  }
+  if (current.count === 1) demoQuotes.delete(key);
+  else demoQuotes.set(key, { ...current, count: current.count - 1 });
+  return true;
 }
 
 export function paymentReplay(paymentHash: string, idem: string): "ok" | "replay" {
@@ -88,19 +206,49 @@ export function paymentReplay(paymentHash: string, idem: string): "ok" | "replay
   return "replay";
 }
 
+export function claimPayment(paymentHash: string, idem: string): "ok" | "replay" {
+  if (paymentReplay(paymentHash, idem) === "replay") return "replay";
+  const pending = paymentInFlight.get(paymentHash);
+  if (pending && pending !== idem) return "replay";
+  paymentInFlight.set(paymentHash, idem);
+  return "ok";
+}
+
+export function releasePayment(paymentHash: string, idem: string): void {
+  if (paymentInFlight.get(paymentHash) === idem) {
+    paymentInFlight.delete(paymentHash);
+  }
+}
+
 export async function put(row: StoredEvidence): Promise<void> {
   const stored: StoredEvidence = { ...row, storedAt: row.storedAt ?? Date.now() };
   remember(stored);
-  if (!persistReady || !dir) return;
-  const file = path.join(dir, `${stored.id}.json`);
-  const tmp = `${file}.${process.pid}.tmp`;
-  await writeFile(tmp, JSON.stringify(stored), "utf8");
-  try {
-    await rename(tmp, file);
-  } catch {
-    await unlink(file).catch(() => undefined);
-    await rename(tmp, file);
+  const writes: Promise<unknown>[] = [];
+  if (persistReady && dir) {
+    const file = path.join(dir, `${stored.id}.json`);
+    const tmp = `${file}.${process.pid}.tmp`;
+    writes.push(
+      writeFile(tmp, JSON.stringify(stored), "utf8").then(async () => {
+        try {
+          await rename(tmp, file);
+        } catch {
+          await unlink(file).catch(() => undefined);
+          await rename(tmp, file);
+        }
+      }),
+    );
   }
+  writes.push(
+    persistDurableEvidence({
+      id: stored.id,
+      idempotencyKey: stored.idempotencyKey,
+      bodyHash: stored.bodyHash,
+      paymentHash: stored.paymentHash,
+      payload: stored,
+      storedAt: stored.storedAt,
+    }),
+  );
+  await Promise.all(writes);
 }
 
 export function currentChain(): { prev: string; id: string } {
@@ -116,23 +264,29 @@ export function hopsInWindow(mandateId: string, windowS: number, now: number): n
   return getSpend(mandateId).hops.filter((h) => h.t > cutoff).length;
 }
 
-export function reserveMandate(mandateId: string, amount: number, now: number): MandateSpend {
+export function reserveMandate(mandateId: string, amount: number, now: number): string {
   const prev = getSpend(mandateId);
+  const reservationId = randomUUID();
   const next: MandateSpend = {
     spent_tinybars: prev.spent_tinybars + amount,
-    hops: [...prev.hops.filter((h) => h.t > now - 24 * 3600 * 1000), { t: now }],
+    hops: [
+      ...prev.hops.filter((h) => h.t > now - 24 * 3600 * 1000),
+      { t: now, reservation_id: reservationId, amount_tinybars: amount },
+    ],
   };
   mandateSpend.set(mandateId, next);
   void persistMandates();
-  return next;
+  return reservationId;
 }
 
-export function releaseMandate(mandateId: string, amount: number): void {
+export function releaseMandate(mandateId: string, reservationId: string): void {
   const prev = getSpend(mandateId);
-  const hops = prev.hops.slice(0, -1);
+  const reservation = prev.hops.find((hop) => hop.reservation_id === reservationId);
+  if (!reservation) return;
+  const amount = reservation.amount_tinybars ?? 0;
   mandateSpend.set(mandateId, {
     spent_tinybars: Math.max(0, prev.spent_tinybars - amount),
-    hops,
+    hops: prev.hops.filter((hop) => hop.reservation_id !== reservationId),
   });
   void persistMandates();
 }

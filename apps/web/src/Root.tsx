@@ -1,7 +1,11 @@
-import { useEffect, useState } from "react";
-import { Desk } from "./Desk";
-import { Site } from "./Site";
-import { Workbench } from "./Workbench";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { CommandCenter } from "./CommandCenter";
+import { Docs } from "./Docs";
+import { Landing } from "./Landing";
+
+const TokenizationStudio = lazy(() =>
+  import("./TokenizationStudio").then((module) => ({ default: module.TokenizationStudio })),
+);
 
 function pathOf(): string {
   return window.location.pathname.replace(/\/$/, "") || "/";
@@ -17,12 +21,37 @@ export function Root() {
   }, []);
 
   useEffect(() => {
-    const mode = path === "/desk" ? "desk" : path === "/app" ? "app" : "site";
+    const mode =
+      path === "/app" || path === "/desk"
+        ? "app"
+        : path === "/assets"
+          ? "assets"
+          : "site";
     document.body.className = `is-${mode}`;
-    document.title = path === "/desk" ? "Hop · Desk" : path === "/app" ? "Hop · Check" : "Hop";
+    document.title =
+      path === "/app" || path === "/desk"
+        ? "Hop · Decision room"
+        : path === "/assets"
+          ? "Hop · ATS"
+          : path === "/docs" || path.startsWith("/docs/")
+            ? "Hop · Docs"
+            : "Hop";
   }, [path]);
 
-  if (path === "/desk") return <Desk />;
-  if (path === "/app") return <Workbench variant="app" />;
-  return <Site />;
+  useEffect(() => {
+    if (path !== "/desk") return;
+    history.replaceState({}, "", "/app");
+    setPath("/app");
+  }, [path]);
+
+  if (path === "/docs" || path.startsWith("/docs/")) return <Docs />;
+  if (path === "/app" || path === "/desk") return <CommandCenter />;
+  if (path === "/assets") {
+    return (
+      <Suspense fallback={<div className="asset-loading">ATS / LOADING</div>}>
+        <TokenizationStudio />
+      </Suspense>
+    );
+  }
+  return <Landing />;
 }

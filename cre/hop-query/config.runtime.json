@@ -1,5 +1,5 @@
 {
-  "query": "account_ltv",
+  "query": "policy_check",
   "protocols": [
     "aave-v3",
     "compound-v3"

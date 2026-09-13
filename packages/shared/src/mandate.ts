@@ -4,6 +4,15 @@ import { QUERY_TYPES, type QueryType } from "./types.js";
 export const DEFAULT_MANDATE_JSON =
   '{"id":"desk-1","agent_id":"workbench","max_tinybars":5000000,"max_hops":40,"window_s":3600,"expires_at":"2027-01-01T00:00:00Z","pay_to":"","queries":["policy_check","market_params","position_counts","liquidations","account_ltv"],"max_block_lag":500,"human_threshold_tinybars":0}';
 
+export type MandateAssuranceKind = "operator" | "human_threshold" | "passport_bound";
+export type MandateAssuranceLevel = "L1" | "L2" | "L3";
+
+export type MandateAssurance = {
+  level: MandateAssuranceLevel;
+  kind: MandateAssuranceKind;
+  consumer_prompt?: string;
+};
+
 export type Mandate = {
   id: string;
   agent_id: string;
@@ -16,6 +25,7 @@ export type Mandate = {
   queries: QueryType[];
   max_block_lag: number;
   human_threshold_tinybars: number;
+  assurance?: MandateAssurance;
 };
 
 export type MandateDecision = {
@@ -28,7 +38,7 @@ export type MandateDecision = {
 
 export type MandateSpend = {
   spent_tinybars: number;
-  hops: { t: number }[];
+  hops: { t: number; reservation_id?: string; amount_tinybars?: number }[];
 };
 
 export type MandateContext = {
@@ -40,6 +50,9 @@ export type MandateContext = {
   spentTinybars: number;
   hopsInWindow: number;
   confirmed: boolean;
+  passportOk?: boolean;
+  passportAgentId?: string;
+  passportPolicyRoot?: string;
 };
 
 export function parseMandate(raw: string | undefined | null): Mandate | null {
@@ -83,6 +96,7 @@ export function parseMandate(raw: string | undefined | null): Mandate | null {
   if (queries.length < 1) return null;
   const per = row.per_call_tinybars === undefined ? undefined : Number(row.per_call_tinybars);
   if (per !== undefined && (!Number.isFinite(per) || per < 0)) return null;
+  const assurance = parseAssurance(row.assurance, human_threshold_tinybars);
   return {
     id,
     agent_id,
@@ -95,7 +109,54 @@ export function parseMandate(raw: string | undefined | null): Mandate | null {
     queries,
     max_block_lag,
     human_threshold_tinybars: Number.isFinite(human_threshold_tinybars) ? human_threshold_tinybars : 0,
+    assurance,
   };
+}
+
+function parseAssurance(raw: unknown, humanThreshold: number): MandateAssurance | undefined {
+  if (raw && typeof raw === "object") {
+    const row = raw as Record<string, unknown>;
+    const kindRaw = String(row.kind ?? "").trim();
+    const kind: MandateAssuranceKind =
+      kindRaw === "passport_bound" || kindRaw === "human_threshold" || kindRaw === "operator"
+        ? kindRaw
+        : humanThreshold > 0
+          ? "human_threshold"
+          : "operator";
+    const levelRaw = String(row.level ?? "").trim();
+    const level: MandateAssuranceLevel =
+      levelRaw === "L1" || levelRaw === "L2" || levelRaw === "L3"
+        ? levelRaw
+        : kind === "passport_bound"
+          ? "L3"
+          : kind === "human_threshold"
+            ? "L2"
+            : "L1";
+    const prompt = String(row.consumer_prompt ?? "").trim();
+    return {
+      level,
+      kind,
+      consumer_prompt: prompt || defaultPrompt(kind),
+    };
+  }
+  if (humanThreshold > 0) {
+    return {
+      level: "L2",
+      kind: "human_threshold",
+      consumer_prompt: defaultPrompt("human_threshold"),
+    };
+  }
+  return {
+    level: "L1",
+    kind: "operator",
+    consumer_prompt: defaultPrompt("operator"),
+  };
+}
+
+function defaultPrompt(kind: MandateAssuranceKind): string {
+  if (kind === "passport_bound") return "Confirm spend for this passport-bound mandate.";
+  if (kind === "human_threshold") return "Confirm payment above the human threshold.";
+  return "Operator-issued spend mandate.";
 }
 
 export function mandateHash(mandate: Mandate): string {
@@ -118,6 +179,20 @@ export function evaluateMandate(mandate: Mandate, ctx: MandateContext): MandateD
   if (mandate.pay_to && mandate.pay_to !== ctx.payTo) return deny("mandate_merchant");
   if (!mandate.queries.includes(ctx.query)) return deny("mandate_query");
   if (ctx.maxBlockLag > mandate.max_block_lag) return deny("mandate_freshness");
+  const assurance = mandate.assurance;
+  if (assurance?.kind === "passport_bound" && !ctx.passportOk) {
+    return deny("passport_required");
+  }
+  if (ctx.passportOk && ctx.passportAgentId && ctx.passportAgentId !== mandate.agent_id) {
+    return deny("passport_agent");
+  }
+  if (
+    ctx.passportOk &&
+    ctx.passportPolicyRoot &&
+    ctx.passportPolicyRoot !== hash
+  ) {
+    return deny("passport_mandate");
+  }
   if (mandate.per_call_tinybars !== undefined && ctx.amountTinybars > mandate.per_call_tinybars) {
     return deny("mandate_per_call");
   }

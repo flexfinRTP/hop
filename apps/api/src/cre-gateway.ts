@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { canonicalJson } from "@hop/shared";
 import { privateKeyToAccount } from "viem/accounts";
@@ -82,4 +83,154 @@ export async function triggerDeployedWorkflow(
     workflow_id: json.result?.workflow_id,
     status: json.result?.status,
   };
+}
+
+export type DonExecutionReport = {
+  execution_id: string;
+  status?: string;
+  executed_in_tee?: boolean;
+  commitment_hash?: string;
+};
+
+const DON_POLL_ATTEMPTS = 4;
+const DON_POLL_MS = 2_000;
+const DON_STATUS_VALUES = new Set(["SUCCESS", "FAILURE", "ACCEPTED", "IN_PROGRESS", "TRIGGERED"]);
+const HEX64 = /^[a-f0-9]{64}$/i;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function spawnCreJson(cfg: AppConfig, args: string[], timeoutMs: number): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cfg.creCli, args, {
+      cwd: cfg.creCwd,
+      shell: false,
+      windowsHide: true,
+      env: process.env,
+    });
+    let out = "";
+    let err = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error("cre_execution_timeout"));
+    }, timeoutMs);
+    child.stdout?.on("data", (data) => {
+      out += String(data);
+    });
+    child.stderr?.on("data", (data) => {
+      err += String(data);
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      const text = `${out}\n${err}`;
+      const parsed = extractJsonValue(text);
+      if (parsed !== undefined) {
+        resolve(parsed);
+        return;
+      }
+      if (code !== 0) reject(new Error(err.trim().slice(-240) || `cre_execution_exit_${code}`));
+      else reject(new Error("cre_execution_no_json"));
+    });
+  });
+}
+
+function extractJsonValue(text: string): unknown {
+  const matches = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/g);
+  if (!matches) return undefined;
+  for (let i = matches.length - 1; i >= 0; i--) {
+    try {
+      return JSON.parse(matches[i]!);
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
+}
+
+function inspectDonPayload(value: unknown): {
+  status?: string;
+  executed_in_tee?: boolean;
+  commitment_hash?: string;
+} {
+  const found: {
+    status?: string;
+    executed_in_tee?: boolean;
+    commitment_hash?: string;
+    hashes: string[];
+  } = { hashes: [] };
+  walk(value, found);
+  return {
+    status: found.status,
+    executed_in_tee: found.executed_in_tee,
+    commitment_hash: found.commitment_hash,
+  };
+}
+
+function walk(
+  value: unknown,
+  found: {
+    status?: string;
+    executed_in_tee?: boolean;
+    commitment_hash?: string;
+    hashes: string[];
+  },
+): void {
+  if (typeof value === "string") {
+    if (HEX64.test(value)) found.hashes.push(value);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    for (const item of value) walk(item, found);
+    return;
+  }
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    if ((key === "cre_commitment_hash" || key === "commitment_hash") && typeof item === "string" && HEX64.test(item)) {
+      found.commitment_hash = item;
+    }
+    if ((key === "executedInTee" || key === "executed_in_tee") && typeof item === "boolean") {
+      found.executed_in_tee = item;
+    }
+    if (key === "status" && typeof item === "string" && DON_STATUS_VALUES.has(item)) {
+      found.status = item;
+    }
+    walk(item, found);
+  }
+}
+
+export async function fetchDonExecution(
+  cfg: AppConfig,
+  executionId: string,
+): Promise<DonExecutionReport> {
+  const id = executionId.trim();
+  if (!id) throw new Error("cre_execution_id_missing");
+  let last: DonExecutionReport = { execution_id: id };
+  for (let attempt = 0; attempt < DON_POLL_ATTEMPTS; attempt++) {
+    if (attempt > 0) await sleep(DON_POLL_MS);
+    const statusJson = await spawnCreJson(cfg, ["execution", "status", id, "--json"], 20_000);
+    const fromStatus = inspectDonPayload(statusJson);
+    last = {
+      execution_id: id,
+      status: fromStatus.status,
+      executed_in_tee: fromStatus.executed_in_tee,
+      commitment_hash: fromStatus.commitment_hash,
+    };
+    if (last.status === "SUCCESS" && !last.commitment_hash) {
+      try {
+        const eventsJson = await spawnCreJson(cfg, ["execution", "events", id, "--json"], 20_000);
+        const fromEvents = inspectDonPayload(eventsJson);
+        last.commitment_hash = fromEvents.commitment_hash ?? last.commitment_hash;
+        last.executed_in_tee = fromEvents.executed_in_tee ?? last.executed_in_tee;
+      } catch {
+        // Events are optional; status SUCCESS without a commitment is not a hash match.
+      }
+    }
+    if (last.status === "SUCCESS" || last.status === "FAILURE") return last;
+  }
+  return last;
 }

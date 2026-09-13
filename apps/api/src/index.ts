@@ -15,7 +15,16 @@ import { mandate } from "./routes/mandate.js";
 import { meta } from "./routes/meta.js";
 import { query } from "./routes/query.js";
 import { world } from "./routes/world.js";
-import { initStore } from "./store.js";
+import { agentCard } from "./agent-card.js";
+import { agentRegistration } from "./agent-registration.js";
+import { closeDatabase } from "./database.js";
+import { startHcsOutboxWorker } from "./hcs-outbox.js";
+import { initStore, storeHealth } from "./store.js";
+import { discovery } from "./routes/discovery.js";
+import { initAssetStore } from "./asset-store.js";
+import { assets } from "./routes/assets.js";
+import { liquidation } from "./routes/liquidation.js";
+import { mountAgentDocs } from "./agent-docs.js";
 
 dns.setDefaultResultOrder("ipv4first");
 
@@ -23,7 +32,9 @@ loadEnv({ path: path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../.
 loadEnv({ path: path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../cre/.env") });
 
 const cfg = loadConfig();
-await initStore(cfg.evidenceDir, cfg.evidenceTtlMs);
+await initStore(cfg.evidenceDir, cfg.evidenceTtlMs, cfg.databaseUrl, cfg.databaseSsl);
+await initAssetStore(cfg.evidenceDir);
+const stopHcsOutbox = startHcsOutboxWorker(cfg);
 
 const app = new Hono();
 const origins = cfg.corsOrigin.split(",").map((s) => s.trim()).filter(Boolean);
@@ -54,6 +65,17 @@ app.use(
   }),
 );
 
+mountAgentDocs(app);
+
+app.get("/.well-known/agent-card.json", (c) => {
+  const origin = new URL(c.req.url).origin;
+  return c.json(agentCard(loadConfig(), origin));
+});
+app.get("/.well-known/agent-registration.json", (c) => {
+  const origin = new URL(c.req.url).origin;
+  return c.json(agentRegistration(loadConfig(), origin));
+});
+
 app.route("/v1/query", query);
 app.route("/v1/evidence", evidence);
 app.route("/v1/events", events);
@@ -61,20 +83,25 @@ app.route("/v1/demo", demo);
 app.route("/v1/meta", meta);
 app.route("/v1/mandate", mandate);
 app.route("/v1/world", world);
+app.route("/v1/discovery", discovery);
+app.route("/v1/assets", assets);
+app.route("/v1/liquidation", liquidation);
 
 app.get("/health", (c) => {
   const live = loadConfig();
   return c.json({
     ok: true,
     product: "HOP",
-    cre: live.creWorkflowId ? "CRE: don" : LABELS.cre,
+    cre: live.hopJoin === "cre" ? LABELS.cre : "CRE: inline local",
     hop_join: live.hopJoin,
+    don_trigger_configured: Boolean(live.creWorkflowId && live.creEthPrivateKey),
     rails: LABELS.rails,
+    storage: storeHealth(),
     posture: {
       custody: "non_custodial",
       ofac: "not_screened",
       mor: "testnet_payee",
-      cre: live.creWorkflowId ? "don" : "simulation",
+      cre: "simulation",
     },
   });
 });
@@ -82,3 +109,10 @@ app.get("/health", (c) => {
 serve({ fetch: app.fetch, port: cfg.port }, () => {
   console.log(`HOP api :${cfg.port}`);
 });
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.once(signal, () => {
+    stopHcsOutbox();
+    void closeDatabase().finally(() => process.exit(0));
+  });
+}

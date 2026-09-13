@@ -11,6 +11,30 @@ import { postJson } from "./http.js";
 
 const SNAP_TTL_MS = 12_000;
 const snapCache = new Map<string, { at: number; snap: HopSnapshot }>();
+const readinessCache = new Map<string, { at: number; result: GraphReadiness }>();
+
+export type GraphReadiness = {
+  ok: boolean;
+  chainHead?: number;
+  sources: {
+    key: string;
+    subgraphId: string;
+    deploymentId?: string;
+    block?: number;
+    hasIndexingErrors?: boolean;
+  }[];
+  error?: string;
+};
+
+const READINESS_QUERY = `
+  query HopGraphReadiness {
+    _meta {
+      deployment
+      hasIndexingErrors
+      block { number timestamp }
+    }
+  }
+`;
 
 const RPC_FALLBACKS = [
   "https://ethereum.publicnode.com",
@@ -33,6 +57,95 @@ function cacheKey(request: QueryRequest): string {
     lag: request.max_block_lag,
     w: request.window ?? null,
   });
+}
+
+export async function checkGraphReadiness(
+  cfg: AppConfig,
+  requested: string[],
+  maxBlockLag: number,
+): Promise<GraphReadiness> {
+  const selected = cfg.protocols.filter(
+    (protocol) =>
+      requested.includes(protocol.key) || requested.includes(protocol.slug),
+  );
+  const cacheId = `${selected.map((protocol) => protocol.key).sort().join(",")}:${maxBlockLag}`;
+  const cached = readinessCache.get(cacheId);
+  if (cached && Date.now() - cached.at < 15_000) return cached.result;
+  if (selected.length !== new Set(requested).size || selected.some((protocol) => !protocol.url)) {
+    return { ok: false, sources: [], error: "graph_unconfigured" };
+  }
+  const headers = authHeaders(cfg);
+  const [head, rows] = await Promise.all([
+    chainHead(cfg.chainRpcUrl),
+    Promise.allSettled(
+    selected.map(async (protocol) => {
+      const response = await postJson(
+        protocol.url,
+        { query: READINESS_QUERY },
+        headers,
+        15_000,
+      );
+      if (response.status < 200 || response.status >= 300) {
+        throw new Error(`${protocol.key}:http_${response.status}`);
+      }
+      const parsed = JSON.parse(response.text) as {
+        data?: {
+          _meta?: {
+            deployment?: string;
+            hasIndexingErrors?: boolean;
+            block?: { number?: number };
+          };
+        };
+        errors?: { message?: string }[];
+      };
+      if (parsed.errors?.length || !parsed.data?._meta?.block?.number) {
+        throw new Error(`${protocol.key}:invalid_meta`);
+      }
+      return {
+        key: protocol.key,
+        subgraphId: protocol.id,
+        deploymentId: parsed.data._meta.deployment,
+        block: parsed.data._meta.block.number,
+        hasIndexingErrors: parsed.data._meta.hasIndexingErrors,
+      };
+    }),
+    ),
+  ]);
+  const sources = rows
+    .filter((row): row is PromiseFulfilledResult<GraphReadiness["sources"][number]> =>
+      row.status === "fulfilled",
+    )
+    .map((row) => row.value);
+  const errors = rows
+    .filter((row): row is PromiseRejectedResult => row.status === "rejected")
+    .map((row) => row.reason instanceof Error ? row.reason.message : String(row.reason));
+  const result: GraphReadiness = {
+    ok:
+      typeof head === "number" &&
+      sources.length === selected.length &&
+      sources.every(
+        (source) =>
+          source.hasIndexingErrors !== true &&
+          typeof source.block === "number" &&
+          Math.abs(head - source.block) <= maxBlockLag,
+      ),
+    chainHead: head,
+    sources,
+    error: errors[0] ??
+      (!head
+        ? "chain_head_unavailable"
+        : sources.some((source) => source.hasIndexingErrors)
+          ? "graph_indexing_errors"
+          : sources.some(
+              (source) =>
+                typeof source.block !== "number" ||
+                Math.abs(head - source.block) > maxBlockLag,
+            )
+            ? "graph_stale"
+            : undefined),
+  };
+  readinessCache.set(cacheId, { at: Date.now(), result });
+  return result;
 }
 
 async function headFromRpc(rpc: string): Promise<number | undefined> {
@@ -96,7 +209,7 @@ export async function liveSnapshot(
       fetchProtocolSnapshot(http, {
         slug: p.slug,
         url: p.url,
-        deploymentId: p.id,
+        subgraphId: p.id,
         authHeaders: auth,
         request,
         policy,
@@ -118,7 +231,7 @@ export async function liveSnapshot(
     onTrace?.("graph", `${slug} ${msg}`);
   });
 
-  if (protocols.length < 1) {
+  if (protocols.length !== selected.length) {
     throw new Error(failures.join(" | ") || "graph_empty");
   }
 

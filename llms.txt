@@ -1,45 +1,47 @@
 # Hop
 
-Confidential lending-risk query. HTTP 402 + OpenAPI. Fixed query types and explicitly selected data sources.
+Point an agent at this file (or /openapi.yaml, /SKILL.md, /documentation/README.md). It can pay Hedera exact x402 and call POST /v1/query in seconds. No SDK. No API key.
+
+Verifiable decision infrastructure for agents. Paid HTTP 402. Fixed query types. Explicit protocol keys. Demo: lending policy gate.
 
 ## Spec
 
-- Product spec: docs/07-where-we-are-2026-09-07.md
+- Architecture and integrations: documentation/README.md
 - OpenAPI: openapi/openapi.yaml
+- Agent skill: skills/hop-query/SKILL.md
+- Human docs: /docs
+- Swagger: /swagger.html
+- Discovery: GET /.well-known/agent-card.json
 
 ## Routes
 
-- POST /v1/query — Hedera exact x402 (Blocky402). Header Idempotency-Key required on paid retry. Optional X-Hop-Mandate, X-Hop-Confirm, X-Hop-World.
-- If CRE mode is enabled but the configured CRE CLI is unavailable, POST /v1/query returns `503 cre_unavailable` before payment.
-- GET /v1/evidence/{id} — public evidence (hashes). No Account.id. No policy caps.
+- POST /v1/query — Hedera exact x402 (Blocky402). Idempotency-Key required on paid retry. Optional X-Hop-Mandate, X-Hop-Confirm, X-Hop-World. 200 includes receipt hop.decision.v1. stale/k_anon_denied are charged attempts.
+- 503 cre_unavailable | graph_unconfigured | policy_unavailable — before payment.
+- GET /v1/evidence/{id} — public hashes. No Account.id. No policy caps.
 - GET /v1/evidence/{id}/peac — PEAC-shaped receipt
-- GET /v1/evidence/{id}/verify — recompute aggregate hash
+- GET /v1/evidence/{id}/verify — hashes, Mirror Node settlement, tiers, hop.decision.v1 receipt
 - GET /v1/mandate — remaining budget (does not pay)
-- GET /v1/meta — rails, mandate remaining, HCS, CRE, World ID, posture. No secrets.
+- GET /v1/meta — rails, protocols, meter, mandate remaining, HCS, CRE, World ID, ATS, posture
+- GET /v1/assets/config — official ATS v8 factory/resolver
+- POST /v1/assets/intents — requires accepted + Mirror-verified settlement
+- GET /v1/liquidation — official Sepolia ChallengeLending status
 - GET /v1/world — World ID readiness
 - POST /v1/world/rp-context — RP signature
 - POST /v1/world/verify — World ID 4.0 Cloud verify → hop token
 
-MCP: `hop_query`, `hop_evidence`, `hop_peac`, `hop_verify`, `hop_mandate`, `hop_meta` (`npm run mcp`). SKILL: `skills/hop-query/SKILL.md`.
+MCP: hop_meta, hop_mandate, hop_pay, hop_query, hop_evidence, hop_peac, hop_verify, hop_world_rp_context, hop_world_verify (`npm start -w @hop/mcp`).
 
 ## Settlement
 
 - network: hedera:testnet
-- asset: "0.0.0" (HBAR tinybars) or a named HTS token id
-- extra.feePayer: from facilitator GET /supported — must match
-- Client: @x402/hedera ExactHederaScheme + createClientHederaSigner
+- asset: "0.0.0" (HBAR tinybars) or HTS token id
+- extra.feePayer: facilitator GET /supported — must match
+- Client: @x402/hedera ExactHederaScheme
 - Not Graph Base USDC x402
-- Amount may meter extra per extra protocol (public). Never the secret cap.
-
-## Mandate
-
-Deterministic budget/velocity/expiry. LLM never pays. 403 mandate_* is not charged.
+- Amount = base + extra per additional protocol (+ optional public-util term). Never the secret cap.
 
 ## Query types
 
 market_params | position_counts | liquidations | policy_check | account_ltv
 
-Hop is a deterministic paid query service, not an LLM or agent orchestrator. The caller's agent
-maps the user's natural-language request to one supported query type, chooses one or two
-configured protocol keys from `/v1/meta`, handles the Hedera x402 payment, and sends the retry.
-Free text is not interpreted by Hop and never selects a hidden data source.
+Data: Messari Lending/CDP 3.1.0 on configured Gateway subgraphs (Aave v3, Compound v3). Same operations on every protocol. Evidence records subgraphId, schemaVersion, methodologyVersion, block, blockTimestamp.

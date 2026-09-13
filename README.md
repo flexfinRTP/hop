@@ -1,145 +1,135 @@
 # Hop
 
-Confidential lending-risk query for ETHOnline 2026 (Classic, from-scratch). One paid hop: 402 → Hedera exact → CRE join → evidence.
+Hop is verifiable decision infrastructure for agents.
 
-Public contract: [`openapi/openapi.yaml`](openapi/openapi.yaml) and this README. Product spec, agent prompts, and threat model live in local `docs/` / `THREAT.md` (gitignored).
+A caller selects a fixed query type and one or two lending protocols (the finance demo: Aave v3 + Compound v3), pays an x402 `exact` quote on Hedera, and receives a sanitized decision plus a public evidence pack. Policy evaluation is confidential. Settlement is public. Graph data is public. The receipt says what was and was not verified.
 
-Partners (three): Chainlink CRE `handlerInTee` · Hedera Blocky402 (HBAR `0.0.0` / HTS) · The Graph (two live Messari lending 3.1.0 protocols).
+The join runs in a Chainlink Runtime Environment confidential workflow: live Messari Lending/CDP **3.1.0** data from The Graph is compared to a private policy table. Policy values never appear in HTTP responses.
 
-Pitch: audit-ready evidence for agent tool use. Not “compliant AI.”
+Hop does not parse natural language, execute caller GraphQL, or hold the payer’s keys. Hop does not provide private payments.
 
-Paid path: `POST /v1/query` → 402 → Blocky402 verify/settle → CRE join (inline engine or `HOP_JOIN=cre`) → evidence. `GET /v1/evidence/{id}` is public hashes.
+## Documentation
+
+| Document | Contents |
+| --- | --- |
+| `/docs` | Human docs hub: point your agent, Swagger, articles |
+| `/swagger.html` | Hosted Swagger UI for `openapi.yaml` |
+| [`documentation/README.md`](documentation/README.md) | Index, trust boundary, identifiers |
+| [`documentation/operator.md`](documentation/operator.md) | Manual activation and demo tape |
+| [`documentation/architecture.md`](documentation/architecture.md) | Query types, charge table, join modes |
+| [`documentation/hedera-x402.md`](documentation/hedera-x402.md) | Blocky402 `exact`, meter, client/server |
+| [`documentation/the-graph.md`](documentation/the-graph.md) | Standardized schema, Gateway queries |
+| [`documentation/chainlink-cre.md`](documentation/chainlink-cre.md) | `handlerInTee`, secrets, simulate vs DON |
+| [`documentation/hedera-ats.md`](documentation/hedera-ats.md) | ATS v8 factory/resolver, bond lifecycle |
+| [`documentation/chainlink-liquidation.md`](documentation/chainlink-liquidation.md) | Official Sepolia challenge workflow |
+| [`documentation/agents.md`](documentation/agents.md) | MCP, skill, mandate, Agent Card |
+| [`documentation/evidence.md`](documentation/evidence.md) | Receipts, HCS, PEAC, verify |
+| [`openapi/openapi.yaml`](openapi/openapi.yaml) | HTTP contract |
+| [`skills/hop-query/SKILL.md`](skills/hop-query/SKILL.md) | Agent retry procedure |
+| [`AI.md`](AI.md) | AI-assisted implementation attribution |
 
 ## Architecture
 
 ```text
-UI / agent
-    │  POST /v1/query  (no X-PAYMENT)
-    ▼
-Hop API ── 402 PaymentRequirements
-    │         network: hedera:testnet
-    │         asset: "0.0.0" (or HTS id)
-    │         extra.feePayer ← GET Blocky402 /supported
-    │
-    │  retry + X-PAYMENT + Idempotency-Key
-    ▼
-CRE handlerInTee (HTTP trigger, Nitro us-west-2)
-    │  1. getSecret POLICY_TABLE inside the enclave
-    │  2. live Graph HTTP from TeeRuntime (two Messari 3.1.0 protocols)
-    │  3. join + aggregate (no Account.id, no caps, metric hashed)
-    │  4. usingTheDons().report() hashes + stamp only
-    ▼
-200 aggregate + evidence hashes (+ HCS commitments)
+Caller
+  POST /v1/query
+        │
+        ▼
+Hop API ── 402  scheme=exact  network=hedera:testnet  asset=0.0.0
+        │         extra.feePayer ← GET {Blocky402}/supported
+        │  X-PAYMENT + Idempotency-Key
+        ▼
+Blocky402 /verify → /settle
+        ▼
+CRE handlerInTee (HTTP, Nitro us-west-2)
+        │  getSecret(POLICY_TABLE)
+        │  live Graph HTTP (TeeRuntime)
+        │  join + sanitize
+        │  usingTheDons().report(commitment)
+        ▼
+200 { status, aggregate, evidence }  + optional HCS
 ```
 
-Graph is the public join key. The confidential input is the policy table inside CRE. Empty table = `policy_unavailable` (503, not charged).
+Public data plane: The Graph. Confidential input: policy table. Payment rail: Hedera HBAR (`0.0.0`) or HTS. Not Graph Base USDC x402.
 
-Badge until a live DON: `CRE: simulation`. Rails label: `data: Graph (EVM) · pay: Hedera`.
-
-## Layout
-
-| Path | Role |
-| --- | --- |
-| `apps/api` | `POST /v1/query`, `GET /v1/evidence/{id}`, `GET /v1/meta` |
-| `apps/web` | `/` marketing · `/app` console · `/desk` night desk |
-| `apps/mcp` | MCP `hop_query` / `hop_evidence` |
-| `cre/hop-query` | CRE workflow: `handlerInTee` |
-| `skills/hop-query` | Agent SKILL for the 402 retry |
-| `openapi/openapi.yaml` | Contract |
-| `llms.txt` | Pointer to OpenAPI |
-
-## Hedera payment flow (Blocky402)
-
-Facilitator: `https://api.testnet.blocky402.com`
-
-1. `GET /supported` (no auth). Read Hedera `exact` kind. Set `extra.feePayer` to `kinds[].extra.feePayer` or `signers["hedera:*"][0]`. **Must match.** Do not hardcode.
-2. Server 402 `PaymentRequirements`: `scheme: exact`, `network: hedera:testnet`, `asset: "0.0.0"` (HBAR tinybars) or an HTS token id, `payTo` = merchant account, `amount` in tinybars.
-3. Client signs with Hedera exact — not a generic EVM/USDC `fetchWithPayment`:
-
-```ts
-import { ExactHederaScheme } from "@x402/hedera/exact/client";
-import { createClientHederaSigner, PrivateKey } from "@x402/hedera";
-
-const scheme = new ExactHederaScheme(signer);
-const signed = await scheme.createPaymentPayload(2, requirements);
-// retry POST /v1/query with X-PAYMENT (base64 PaymentPayload) + Idempotency-Key
-```
-
-4. API `POST` facilitator `/verify` then `/settle`. Store settlement ref on evidence.
-5. Same `Idempotency-Key` → same evidence id, **no second settle**.
-
-Do not proxy Graph’s Base USDC x402. That is not the Hedera prize.
-
-- Unpaid/bad payload = no charge. Missing policy = 503, no charge. `stale` and `k_anon_denied` = HTTP 200, **charged**. No invented refunds.
-- Workbench may call `POST /v1/demo/sign` when `HOP_DEMO_SIGN=1` (demo payer keys in `.env`). That still produces a real Blocky402 payload. Agents should send `X-PAYMENT` themselves.
-
-## Graph
-
-Two live Messari Lending/CDP **3.1.0** subgraphs (intended: Aave v3 + Compound v3). IDs go in `.env` **after** deployments are verified. Do not ship dead IDs. Evidence must record deployment id + `schemaVersion` + block.
-
-`Market.maximumLTV` is a protocol parameter, not a wallet’s current LTV. No `Position.ltv` / `healthFactor` in this schema.
-
-## CRE
-
-Default `HOP_JOIN=cre`: paid hop runs `cre workflow simulate hop-query --non-interactive --trigger-index 0 --http-payload ...` (WASM `handlerInTee`, live Graph/RPC). No inline fallback on that path. Set `HOP_JOIN=inline` only for local join without the CRE CLI.
-
-Hop does not contain an LLM or orchestrator. The user's agent maps a natural-language request to
-one supported query type, chooses configured protocol sources from `/v1/meta`, handles the Hedera
-x402 payment, and calls this API. The API rejects unconfigured sources before payment.
-
-The API preflights the CRE CLI before returning a payment quote. Set `CRE_CLI` to `cre` when it
-is on `PATH`, or to the absolute path of `cre.exe` on Windows. If it is unavailable, the API
-returns `503 cre_unavailable` before any Hedera payment can settle.
-
-CLI simulation is the ETHOnline-qualified TEE path and makes live HTTP calls. Live DON: set `CRE_WORKFLOW_ID` (invite) to also POST `workflows.execute` to the CRE gateway. Stub `handler` (non-TEE) = Chainlink miss. Workflow **binary is not confidential**. `usingTheDons().report()` crosses only hashes + stamp.
-
-```bash
-cd cre/hop-query && bun install && cd ..
-cp .env.example .env   # CRE_ETH_PRIVATE_KEY + HOP_POLICY_TABLE_JSON + GRAPH_API_KEY
-cre workflow simulate hop-query --target staging-settings --non-interactive --trigger-index 0 --http-payload @hop-query/http-payload.json
-```
-
-## Setup (owner)
-
-Do not start this in the agent session unless asked.
+## Quick start
 
 ```bash
 cp .env.example .env
 npm install
-npm run dev:api
-npm run dev:web
+npm run dev:api    # http://localhost:8787
+npm run dev:web    # http://localhost:5173
 ```
 
-Workbench: http://localhost:5173 · API: http://localhost:8787
+Required for a live join: Hedera testnet payer/merchant, Blocky402 reachable, `GRAPH_API_KEY`, `HOP_POLICY_TABLE_JSON`, and (when `HOP_JOIN=cre`) an authenticated CRE CLI.
 
-## Live testnet example
+```bash
+cd cre
+cre workflow simulate hop-query \
+  --target staging-settings \
+  --non-interactive \
+  --trigger-index 0 \
+  --http-payload @hop-query/http-payload.json \
+  --env ./.env
+```
 
-Paid `policy_check` (Hedera testnet, Blocky402 settle):
+Do not start API or web from an unattended agent session unless asked.
+
+## HTTP
+
+```http
+POST /v1/query
+GET  /v1/meta
+GET  /v1/evidence?limit=50
+GET  /v1/evidence/{id}
+GET  /v1/evidence/{id}/peac
+GET  /v1/evidence/{id}/verify
+GET  /.well-known/agent-card.json
+```
+
+Unpaid query:
+
+```bash
+curl -sS http://localhost:8787/v1/query \
+  -H "content-type: application/json" \
+  -d '{"query":"policy_check","protocols":["aave-v3","compound-v3"],"max_block_lag":50}'
+```
+
+HTTP 402 body: `accepts[]` with `scheme`, `network`, `asset`, `amount`, `payTo`, `extra.feePayer`. Sign with `@x402/hedera` `ExactHederaScheme`. Retry with `X-PAYMENT` (base64 PaymentPayload) and `Idempotency-Key`.
+
+Empty policy or missing Graph URLs or missing CRE CLI (cre mode) fail **before** settle (`503`). `stale` and `k_anon_denied` are HTTP 200 and **are** settled. No refunds.
+
+## Data
+
+Two Gateway subgraphs, one Messari schema:
+
+| Key | Protocol | Subgraph ID |
+| --- | --- | --- |
+| `aave-v3` | Aave v3 Ethereum | `JCNWRypm7FYwV8fx5HhzZPSFaMxgkPuw4TnR3Gpi81zk` |
+| `compound-v3` | Compound v3 Ethereum | `AwoxEZbiWLvv6e3QdvdMZw4WDURdGbvPfHmZRc8Dpfz9` |
+
+Evidence stores `subgraphId`, `schemaVersion`, `methodologyVersion`, block number, and block timestamp. `Market.maximumLTV` is a protocol parameter. This schema has no `Position.ltv` / `healthFactor`.
+
+## Confidential compute
+
+Default `HOP_JOIN=cre`. Paid hops run `cre workflow simulate` (`handlerInTee`, live HTTP). There is no silent inline fallback on that path. `HOP_JOIN=inline` is local join without the CLI.
+
+CLI simulation is not a hardware TEE. Workflow WASM is not confidential. `usingTheDons().report()` carries hashes and public Graph identifiers only. `cre.report_hash` is Hop’s SHA-256 of that commitment.
+
+## Agents
+
+Point an agent at [`llms.txt`](llms.txt), [`openapi/openapi.yaml`](openapi/openapi.yaml), or [`skills/hop-query/SKILL.md`](skills/hop-query/SKILL.md). It pays Hedera exact x402 and calls `POST /v1/query` in seconds. No SDK. No API key.
+
+Human hub: `/docs`. Hosted Swagger: `/swagger.html`. MCP tools: `hop_meta`, `hop_mandate`, `hop_query`, `hop_evidence`, `hop_peac`, `hop_verify`, `hop_world_rp_context`, `hop_world_verify`. Discovery: `GET /.well-known/agent-card.json`.
+
+Mandates are deterministic budgets. The model does not pay.
+
+## Live settlement example
 
 https://hashscan.io/testnet/transaction/0.0.7162784-1789187260-227607013
 
-Payer `0.0.10490510`. CRE is `handlerInTee` HTTP + Nitro; CLI sim until `CRE_WORKFLOW_ID` is set. Graph deployments and block are on the evidence pack. HCS anchors hashes when operator keys are set.
+Payer `0.0.10490510`. Graph identifiers and CRE artifact are on the evidence pack. HCS anchors hashes when operator keys are set.
 
-## World ID
+## Posture
 
-Optional unique-human gate (not KYC). `POST /v1/world/rp-context` then IDKit, `POST /v1/world/verify` (World `/api/v4/verify/{rp_id}`), `X-Hop-World` on the paid hop. Evidence stores SHA-256 of the nullifier only. `WORLD_REQUIRED=1` to require it.
-
-## Mandate (agents)
-
-Deterministic. The model does not authorize pay.
-
-- Header `X-Hop-Mandate` (JSON or base64) or server default `HOP_MANDATE_JSON`
-- Checks: expiry, merchant `payTo`, query allowlist, freshness cap, per-call, budget, velocity
-- `human_threshold_tinybars` → HTTP 403 `mandate_review` until `X-Hop-Confirm: 1`
-- Over budget / expired → 403, **no settle**
-
-MCP: `hop_query`, `hop_evidence`, `hop_peac`, `hop_verify`, `hop_mandate`, `hop_meta`.
-
-## Receipts
-
-- `GET /v1/evidence/{id}` — hashes, settlement, chain, mandate hash
-- `GET /v1/evidence/{id}/peac` — PEAC-shaped portable receipt
-- `GET /v1/evidence/{id}/verify` — recompute aggregate hash
-- HCS: set `HOP_HCS_AUTO=1` (or `HEDERA_HCS_TOPIC`) plus operator keys
-
-Posture labels: non-custodial · OFAC not screened · testnet payee. Not MSB/CASP/RIA. WALL ATS is simulated.
+Non-custodial · OFAC not screened · testnet payee. Not MSB/CASP/RIA. WALL/ATS is a simulated secondary view of an already-paid aggregate.

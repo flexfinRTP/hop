@@ -115,9 +115,6 @@ const EXTRA_PROMPTS = [
   },
 ] as const;
 
-const OPENAPI_RAW =
-  "https://raw.githubusercontent.com/flexfinRTP/ethonline26/main/openapi/openapi.yaml";
-
 const AGENT_DOCS: {
   n: string;
   k: string;
@@ -125,17 +122,11 @@ const AGENT_DOCS: {
   href: string;
   ext?: true;
 }[] = [
-  { n: "01", k: "llms.txt", v: "public explainer · routes · 402", href: "/llms.txt" },
-  { n: "02", k: "OpenAPI", v: "POST /v1/query · contract", href: "/openapi.yaml" },
-  {
-    n: "03",
-    k: "Swagger",
-    v: "editor",
-    href: `https://editor.swagger.io/?url=${encodeURIComponent(OPENAPI_RAW)}`,
-    ext: true,
-  },
-  { n: "04", k: "SKILL", v: "Hedera exact retry · mandate", href: "/SKILL.md" },
-  { n: "05", k: "README", v: "Blocky402 · feePayer · MCP", href: "/README.md" },
+  { n: "01", k: "llms.txt", v: "routes · 402 · query types", href: "/llms.txt" },
+  { n: "02", k: "OpenAPI", v: "POST /v1/query", href: "/openapi.yaml" },
+  { n: "03", k: "Swagger", v: "hosted UI", href: "/docs/api" },
+  { n: "04", k: "SKILL", v: "Hedera exact retry", href: "/SKILL.md" },
+  { n: "05", k: "Docs", v: "architecture · x402 · Graph · CRE", href: "/docs" },
 ];
 
 function hop(path: string) {
@@ -157,9 +148,6 @@ export function Site() {
           <a href="#how">How it works</a>
           <a href="#use-cases">Use cases</a>
           <a href="#proof">Proof</a>
-          <a href="/desk" onClick={hop("/desk")}>
-            Desk
-          </a>
           <a className="site-btn" href="/app" onClick={hop("/app")}>
             Run a check
           </a>
@@ -331,14 +319,17 @@ export function Site() {
         <section id="agent" className="site-block site-agent">
           <div className="site-agent-copy">
             <p className="site-kicker">FOR AGENTS AND BUILDERS</p>
-            <h2>Give your agent the contract, not a guess.</h2>
+            <h2>Point your agent at these files. Hedera in seconds.</h2>
             <p>
-              Start with the public explainer. Then use the OpenAPI contract to send a
-              fixed query, handle the HTTP 402, and retry with Hedera exact payment.
+              Give it llms.txt, OpenAPI, or SKILL. It pays exact x402 and uses the decision API.
+              No SDK. No API key.
             </p>
             <div className="site-agent-links">
               <a className="site-btn" href="/llms.txt">
-                Read the agent explainer
+                Give the agent llms.txt
+              </a>
+              <a className="site-btn ghost" href="/docs" onClick={hop("/docs")}>
+                Open docs
               </a>
               <a className="site-btn ghost" href="/openapi.yaml">
                 Open OpenAPI
@@ -351,6 +342,7 @@ export function Site() {
                 <span>{d.n}</span>
                 <a
                   href={d.href}
+                  onClick={d.href.startsWith("/docs") ? hop(d.href) : undefined}
                   {...(d.ext ? { target: "_blank", rel: "noreferrer" } : {})}
                 >
                   <strong>{d.k}</strong>

@@ -7,6 +7,15 @@ staging-settings:
     config-path: "./config.runtime.json"
     secrets-path: "../secrets.yaml"
 
+api-settings:
+  user-workflow:
+    workflow-name: "hop-query-api"
+    deployment-registry: "private"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.runtime.generated.json"
+    secrets-path: "../secrets.yaml"
+
 production-settings:
   user-workflow:
     workflow-name: "hop-query-production"

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { loadConfig, requirements } from "../config.js";
 import { rateOk } from "../rate-limit.js";
+import { consumeDemoQuote } from "../store.js";
 import { facilitatorFeePayer } from "../x402.js";
 
 export const demo = new Hono();
@@ -16,9 +17,26 @@ demo.post("/sign", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as {
     requirements?: ReturnType<typeof requirements>;
   };
-  const feePayer = body.requirements?.extra?.feePayer || (await facilitatorFeePayer(cfg));
-  const reqs = body.requirements ?? requirements(cfg, feePayer);
-  if (reqs.payTo && reqs.payTo !== cfg.payTo) {
+  if (!body.requirements) {
+    return c.json({ error: "demo_quote_required" }, 400);
+  }
+  let feePayer: string;
+  try {
+    feePayer = await facilitatorFeePayer(cfg);
+  } catch {
+    return c.json({ error: "facilitator_unavailable" }, 503);
+  }
+  const reqs = body.requirements;
+  const valid =
+    reqs.scheme === "exact" &&
+    reqs.network === cfg.network &&
+    reqs.asset === cfg.asset &&
+    reqs.payTo === cfg.payTo &&
+    reqs.maxTimeoutSeconds === cfg.maxTimeoutSeconds &&
+    reqs.extra?.feePayer === feePayer &&
+    /^\d+$/.test(reqs.amount) &&
+    Number(reqs.amount) > 0;
+  if (!valid || !consumeDemoQuote(reqs)) {
     return c.json({ error: "bad_payment" }, 400);
   }
   try {

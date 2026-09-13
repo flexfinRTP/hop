@@ -58,6 +58,7 @@ cre/**/bun.lockb
 cre/.env
 cre/**/.env
 cre/hop-query/http-payload.json
+cre/hop-query/config.runtime.generated.json
 
 # Local evidence receipts
 data/

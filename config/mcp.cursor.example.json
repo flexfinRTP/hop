@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "the-graph-subgraph": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "--header",
+        "Authorization:${AUTH_HEADER}",
+        "https://subgraphs.mcp.thegraph.com/sse"
+      ],
+      "env": {
+        "AUTH_HEADER": "Bearer ${GRAPH_API_KEY}"
+      }
+    },
+    "hop": {
+      "command": "npm",
+      "args": ["start", "-w", "@hop/mcp"],
+      "env": {
+        "HOP_API_URL": "${HOP_API_URL}",
+        "HOP_MANDATE_JSON": "${HOP_MANDATE_JSON}",
+        "HEDERA_PAYER_ID": "${HEDERA_PAYER_ID}",
+        "HEDERA_PAYER_KEY": "${HEDERA_PAYER_KEY}",
+        "HOP_AGENT_MAX_TINYBARS": "${HOP_AGENT_MAX_TINYBARS}"
+      }
+    }
+  }
+}

@@ -10,9 +10,11 @@ import {
   type TeeRuntime,
 } from "@chainlink/cre-sdk";
 import {
+  canonicalJson,
   creCommitment,
   fetchProtocolSnapshotSync,
   hashAggregate,
+  hashJson,
   joinAndAggregate,
   parsePolicyTable,
   sanitizeAggregate,
@@ -22,6 +24,7 @@ import {
 } from "../../packages/shared/src/index.ts";
 
 type GraphCfg = {
+  key?: string;
   slug: string;
   url: string;
   id: string;
@@ -36,12 +39,13 @@ type Config = {
   authorized_evm_address?: string;
   graph: {
     schemaVersion: string;
-    graph_auth_header?: string;
     protocols: GraphCfg[];
   };
 };
 
-const NITRO_US_WEST_2 = [{ tee: "nitro" as const, regions: ["us-west-2"] }];
+const NITRO_US_WEST_2: [{ tee: "nitro"; regions: ["us-west-2"] }] = [
+  { tee: "nitro", regions: ["us-west-2"] },
+];
 
 function creHttp(runtime: TeeRuntime<Config>): GraphHttp {
   const client = new HTTPClient();
@@ -85,27 +89,23 @@ function chainHeadSync(http: GraphHttp, rpc: string): number | undefined {
   return Number.parseInt(parsed.result, 16);
 }
 
-function authHeaders(config: Config, runtime: TeeRuntime<Config>): Record<string, string> {
-  const headers: Record<string, string> = {};
-  let token = config.graph.graph_auth_header?.trim() ?? "";
-  if (!token) {
-    try {
-      const graph = runtime.getSecret({ id: "GRAPH_API_KEY" }).result();
-      token = graph.value?.trim() ?? "";
-    } catch {
-      token = "";
-    }
-  }
-  if (token) {
-    headers.Authorization = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-  }
-  return headers;
+function requiredSecret(runtime: TeeRuntime<Config>, id: string): string {
+  const secret = runtime.getSecret({ id }).result().value?.trim() ?? "";
+  if (!secret) throw new Error(`secret_${id.toLowerCase()}_unavailable`);
+  return secret;
+}
+
+function authHeaders(runtime: TeeRuntime<Config>): Record<string, string> {
+  const token = requiredSecret(runtime, "GRAPH_API_KEY");
+  return {
+    Authorization: token.startsWith("Bearer ") ? token : `Bearer ${token}`,
+  };
 }
 
 function queryFromPayload(runtime: TeeRuntime<Config>, payload: HTTPPayload): QueryRequest {
   let decoded: Partial<QueryRequest> = {};
   try {
-    decoded = decodeJson<Partial<QueryRequest>>(payload.input);
+    decoded = decodeJson(payload.input) as Partial<QueryRequest>;
   } catch {
     decoded = {};
   }
@@ -124,7 +124,7 @@ function queryFromPayload(runtime: TeeRuntime<Config>, payload: HTTPPayload): Qu
 }
 
 function reportCommitment(runtime: TeeRuntime<Config>, commitment: Record<string, unknown>): string {
-  const encoded = Buffer.from(JSON.stringify(commitment)).toString("base64");
+  const encoded = Buffer.from(canonicalJson(commitment)).toString("base64");
   const donRuntime = runtime.usingTheDons();
   donRuntime
     .report({
@@ -134,7 +134,7 @@ function reportCommitment(runtime: TeeRuntime<Config>, commitment: Record<string
       hashingAlgo: "keccak256",
     })
     .result();
-  return encoded;
+  return hashJson(commitment);
 }
 
 const onQuery = (runtime: TeeRuntime<Config>, payload: HTTPPayload): string => {
@@ -151,13 +151,24 @@ const onQuery = (runtime: TeeRuntime<Config>, payload: HTTPPayload): string => {
 
   const request = queryFromPayload(runtime, payload);
   const http = creHttp(runtime);
-  const headers = authHeaders(runtime.config, runtime);
-  const protocols = runtime.config.graph.protocols.filter((p) => p.url);
-  if (protocols.length < 1) {
+  const requested = new Set(request.protocols);
+  const protocols = runtime.config.graph.protocols.filter(
+    (protocol) =>
+      protocol.url &&
+      [...requested].some(
+        (value) =>
+          protocol.key === value ||
+          protocol.slug === value ||
+          protocol.slug.startsWith(`${value}-`),
+      ),
+  );
+  if (protocols.length !== requested.size) {
     return JSON.stringify({ error: "graph_unconfigured" });
   }
 
   try {
+    const headers = authHeaders(runtime);
+    const policyCommitmentKey = requiredSecret(runtime, "POLICY_COMMITMENT_SALT");
     const head = chainHeadSync(http, runtime.config.chain_rpc_url);
     const snapshot = {
       chainHead: head,
@@ -165,7 +176,7 @@ const onQuery = (runtime: TeeRuntime<Config>, payload: HTTPPayload): string => {
         fetchProtocolSnapshotSync(http, {
           slug: p.slug,
           url: p.url,
-          deploymentId: p.id,
+          subgraphId: p.id,
           authHeaders: headers,
           request,
           policy,
@@ -173,7 +184,7 @@ const onQuery = (runtime: TeeRuntime<Config>, payload: HTTPPayload): string => {
         }),
       ),
     };
-    const joined = joinAndAggregate(policy, snapshot, request);
+    const joined = joinAndAggregate(policy, snapshot, request, policyCommitmentKey);
     const aggregate = sanitizeAggregate(joined.aggregate);
     const commitment = creCommitment({
       status: joined.status,
@@ -182,14 +193,14 @@ const onQuery = (runtime: TeeRuntime<Config>, payload: HTTPPayload): string => {
       k_anon: joined.k_anon,
       graph: joined.graph,
     });
-    const report_hash = reportCommitment(runtime, commitment);
+    const cre_commitment_hash = reportCommitment(runtime, commitment);
     return JSON.stringify({
       cre: {
         mode: "simulation",
         artifact: "handlerInTee",
         tee: "nitro:us-west-2",
         trigger: "http",
-        report_hash,
+        cre_commitment_hash,
       },
       status: joined.status,
       aggregate,

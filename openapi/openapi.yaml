@@ -1,16 +1,45 @@
 openapi: 3.1.0
 info:
-  title: Hop
-  description: Confidential lending-risk query. Hedera exact x402 (Blocky402). Fixed query types and explicitly selected configured data sources; Hop does not parse natural-language prompts.
-  version: 0.0.55
+  title: Hop Query API
+  description: |
+    Point an agent at this spec (or /llms.txt, /SKILL.md). Hedera exact x402
+    in seconds: unpaid POST /v1/query returns 402, retry with X-PAYMENT. No
+    API key. Human docs: /docs. Swagger: /swagger.html. Verifiable decision
+    infrastructure for agents. Demo vertical: paid lending policy queries.
+    Settlement is public Hedera x402 `exact` via Blocky402.
+    Data is Messari Lending/CDP schema 3.1.0 from The Graph Gateway. The join
+    runs in a Chainlink CRE `handlerInTee` workflow (simulation unless a DON
+    result is retrieved and matched). Query types are enumerated; Hop does not
+    parse natural language. Policy values are omitted from the result.
+    Technical reference: documentation/README.md. Machine files also at
+    /llms.txt and /SKILL.md.
+  version: 0.0.70
 servers:
   - url: http://localhost:8787
 paths:
+  /.well-known/agent-card.json:
+    get:
+      operationId: agentCard
+      summary: A2A Agent Card (discovery)
+      responses:
+        "200":
+          description: Agent Card JSON
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
   /v1/query:
     post:
       operationId: query
-      summary: Paid lending-risk query
+      summary: Paid decision query (finance demo)
       parameters:
+        - name: X-PAYMENT
+          in: header
+          required: false
+          description: Base64 x402 v2 PaymentPayload on the paid retry. PAYMENT-SIGNATURE is also accepted.
+          schema:
+            type: string
         - name: Idempotency-Key
           in: header
           required: false
@@ -43,7 +72,11 @@ paths:
               $ref: "#/components/schemas/QueryRequest"
       responses:
         "200":
-          description: Charged outcome (success, stale, or k_anon_denied)
+          description: |
+            Charged outcome. Settlement happens before the join (charge-for-attempt).
+            `accept`, `reject`, `stale`, and `k_anon_denied` are all settled.
+            `stale` means the join was unevaluable; persist `receipt.evidence_id` and do not reuse the payment payload.
+            Idempotent replay returns the same evidence with `receipt.charge.semantics=idempotent_replay` and is not settled again.
           content:
             application/json:
               schema:
@@ -58,6 +91,8 @@ paths:
                 $ref: "#/components/schemas/PaymentRequired"
         "403":
           description: payer_denied, world_required, or mandate DENY/REVIEW — not charged
+        "409":
+          description: In-flight idempotent request ended before evidence persistence — not charged again
         "429":
           description: rate_limited — not charged
         "503":
@@ -66,6 +101,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorBody"
+  /v1/evidence:
+    get:
+      operationId: listEvidence
+      summary: Recent public evidence packs, newest first
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: Evidence list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, count]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Evidence"
+                  count:
+                    type: integer
   /v1/evidence/{id}:
     get:
       operationId: getEvidence
@@ -125,16 +188,58 @@ paths:
   /v1/evidence/{id}/verify:
     get:
       operationId: verifyEvidence
-      summary: Recompute aggregate hash and check chain link
+      summary: Recompute hashes and confirm public Hedera settlement
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: string
+        - name: refresh
+          in: query
+          schema:
+            type: string
+            enum: ["1"]
       responses:
         "200":
-          description: Verify
+          description: |
+            `ok` is local hashes + public settlement (+ HCS if present) + structural CRE.
+            `cre_ok` is structural CRE fields only. `tiers.cre_don_verified` is true only when
+            `cre.mode` is `don` after a commitment-matched DON execution. `tiers.hcs_confirmed`
+            is vacuously true when `hcs_present` is false. `receipt` is `hop.decision.v1`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, tiers, ok_means, cre_ok_means, hcs_present]
+                properties:
+                  ok: { type: boolean }
+                  ok_means:
+                    type: string
+                    const: local_hashes_and_public_settlement
+                  cre_ok_means:
+                    type: string
+                    const: structural_simulation_fields
+                  hcs_present: { type: boolean }
+                  tiers:
+                    type: object
+                    required: [recomputed, settlement_confirmed, hcs_confirmed, cre_simulation, cre_don_verified]
+                    properties:
+                      recomputed: { type: boolean }
+                      settlement_confirmed: { type: boolean }
+                      hcs_confirmed: { type: boolean }
+                      cre_simulation: { type: boolean }
+                      cre_don_verified: { type: boolean }
+                  receipt:
+                    $ref: "#/components/schemas/VerifiableDecisionReceipt"
+                  aggregate_ok: { type: boolean }
+                  chain_ok: { type: boolean }
+                  predecessor_ok: { type: boolean }
+                  peac_ok: { type: boolean }
+                  cre_ok: { type: boolean }
+                  settlement_ref_present: { type: boolean }
+                  external_settlement_verified: { type: boolean }
+                  external_hcs_verified: { type: boolean }
         "404":
           description: Unknown id
   /v1/events/{id}:
@@ -236,7 +341,7 @@ components:
         - stale
     QueryResponse:
       type: object
-      required: [status, evidence]
+      required: [status, evidence, receipt]
       properties:
         status:
           $ref: "#/components/schemas/QueryStatus"
@@ -246,12 +351,88 @@ components:
           additionalProperties: true
         evidence:
           $ref: "#/components/schemas/Evidence"
+        receipt:
+          $ref: "#/components/schemas/VerifiableDecisionReceipt"
         reason:
           type: object
         mandate:
           type: object
         trace:
           type: array
+    VerifiableDecisionReceipt:
+      type: object
+      required: [schema, decision, privacy, payment, charge, graph, cre, hashes, evidence_id]
+      properties:
+        schema:
+          type: string
+          const: hop.decision.v1
+        decision:
+          type: object
+          required: [status, query, demo_vertical]
+          properties:
+            status:
+              $ref: "#/components/schemas/QueryStatus"
+            query:
+              $ref: "#/components/schemas/QueryType"
+            demo_vertical:
+              type: string
+              const: finance.lending_policy_gate
+        privacy:
+          type: object
+          required: [policy_values, graph_source, settlement]
+          properties:
+            policy_values:
+              type: string
+              const: omitted
+            graph_source:
+              type: string
+              const: public
+            settlement:
+              type: string
+              const: public
+        payment:
+          type: object
+          required: [network, scheme, ref, amount]
+          properties:
+            network:
+              type: string
+              const: hedera:testnet
+            scheme:
+              type: string
+              const: exact
+            ref:
+              type: string
+            payer_account:
+              type: string
+            amount:
+              type: string
+        charge:
+          type: object
+          required: [semantics, settled]
+          properties:
+            semantics:
+              type: string
+              enum: [attempt, idempotent_replay]
+            settled:
+              type: boolean
+        graph:
+          type: object
+        cre:
+          type: object
+        hashes:
+          type: object
+          required: [aggregate, policy]
+          properties:
+            aggregate: { type: string }
+            policy: { type: string }
+            peac: { type: string }
+            chain: { type: string }
+            cre_commitment: { type: string }
+        evidence_id:
+          type: string
+        verification:
+          type: object
+          description: Omitted on POST /v1/query. Filled by GET /v1/evidence/{id}/verify.
     PaymentRequired:
       type: object
       required: [x402Version, accepts]
@@ -303,6 +484,7 @@ components:
             - bad_payment
             - idempotency_required
             - idempotency_conflict
+            - idempotency_incomplete
             - payer_denied
             - rate_limited
             - not_found
@@ -320,6 +502,7 @@ components:
             - mandate_budget
             - mandate_velocity
             - world_required
+            - world_unconfigured
             - mandate_review
             - bad_mandate
     Evidence:
@@ -361,14 +544,31 @@ components:
               type: array
               items:
                 type: object
-                required: [id, schemaVersion]
+                required: [id, subgraphId, schemaVersion]
                 properties:
                   id:
+                    type: string
+                    deprecated: true
+                    description: Legacy alias for subgraphId (Gateway Subgraph ID).
+                  subgraphId:
+                    type: string
+                    description: Graph Gateway / Studio Subgraph ID used in /subgraphs/id/{id}.
+                  deploymentId:
+                    type: string
+                    description: Graph `_meta.deployment` (deployment/IPFS identifier) when returned by the Gateway.
+                  slug:
                     type: string
                   schemaVersion:
                     type: string
                     example: "3.1.0"
+                  subgraphVersion:
+                    type: string
+                  methodologyVersion:
+                    type: string
+                    description: Messari methodology version from lendingProtocols.
                   block:
+                    type: integer
+                  blockTimestamp:
                     type: integer
         policy:
           type: object
@@ -408,10 +608,21 @@ components:
               type: string
             trigger:
               type: string
+            cre_commitment_hash:
+              type: string
+              description: SHA-256 of the JSON commitment passed to usingTheDons().report().
             report_hash:
               type: string
+              deprecated: true
+              description: Historical alias for cre_commitment_hash.
             execution_id:
               type: string
+              description: CRE workflow_execution_id when a DON trigger was accepted. Not proof of a matched result.
+            don_status:
+              type: string
+              description: CRE execution status from `cre execution status` when retrieved.
+            don_executed_in_tee:
+              type: boolean
         world:
           type: object
           properties:

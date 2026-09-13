@@ -4,9 +4,12 @@ const BLOCKED_KEYS = new Set([
   "caps",
   "cap",
   "threshold",
+  "thresholds",
   "policy_table",
+  "policytable",
   "op",
   "account",
+  "accountid",
   "account_id",
   "accounts",
 ]);
@@ -16,12 +19,7 @@ export function metricHash(metric: string): string {
 }
 
 export function dropCapKeys(value: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(value)) {
-    if (BLOCKED_KEYS.has(key) || key === "metric") continue;
-    out[key] = item;
-  }
-  return out;
+  return sanitizeRecord(value);
 }
 
 /** Public hop JSON only. Caps, Account.id, and metric names never leave. */
@@ -29,15 +27,38 @@ export function sanitizeAggregate(
   aggregate: Record<string, unknown> | undefined,
 ): Record<string, unknown> | undefined {
   if (!aggregate) return undefined;
-  const json = JSON.stringify(aggregate);
-  if (/0x[a-fA-F0-9]{40}/.test(json) && /account/i.test(json)) {
-    return { error: "sanitized" };
-  }
-  const next = dropCapKeys(aggregate);
+  const next = sanitizeRecord(aggregate);
   if (typeof aggregate.metric === "string" && typeof next.metric_hash !== "string") {
     next.metric_hash = metricHash(aggregate.metric);
   }
   return next;
+}
+
+function normalizedKey(key: string): string {
+  return key.replace(/[-_\s]/g, "").toLowerCase();
+}
+
+function sanitizeRecord(value: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    const normalized = normalizedKey(key);
+    if (BLOCKED_KEYS.has(key.toLowerCase()) || BLOCKED_KEYS.has(normalized) || normalized === "metric") {
+      continue;
+    }
+    out[key] = sanitizeValue(item);
+  }
+  return out;
+}
+
+function sanitizeValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sanitizeValue);
+  if (value && typeof value === "object") {
+    return sanitizeRecord(value as Record<string, unknown>);
+  }
+  if (typeof value === "string" && /0x[a-fA-F0-9]{40}/.test(value)) {
+    return "[redacted]";
+  }
+  return value;
 }
 
 export function hashAggregate(aggregate: Record<string, unknown> | undefined): string {

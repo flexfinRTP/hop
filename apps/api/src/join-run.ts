@@ -10,7 +10,7 @@ import {
   type QueryRequest,
 } from "@hop/shared";
 import type { AppConfig } from "./config.js";
-import { creEvmAddress, triggerDeployedWorkflow } from "./cre-gateway.js";
+import { creEvmAddress, fetchDonExecution, triggerDeployedWorkflow } from "./cre-gateway.js";
 import { liveSnapshot } from "./graph.js";
 
 export type JoinOutcome = HopJoinResult & {
@@ -19,10 +19,22 @@ export type JoinOutcome = HopJoinResult & {
     artifact?: string;
     tee?: string;
     trigger?: "http";
+    cre_commitment_hash?: string;
+    /** @deprecated historical simulation output */
     report_hash?: string;
     execution_id?: string;
+    don_status?: string;
+    don_executed_in_tee?: boolean;
   };
 };
+
+let creSimulationTail: Promise<void> = Promise.resolve();
+let creReadinessCache:
+  | { at: number; result: { ok: true } | { ok: false; detail: string } }
+  | undefined;
+let creReadinessPending:
+  | Promise<{ ok: true } | { ok: false; detail: string }>
+  | undefined;
 
 function creConfig(cfg: AppConfig, request: QueryRequest) {
   return {
@@ -34,7 +46,7 @@ function creConfig(cfg: AppConfig, request: QueryRequest) {
     authorized_evm_address: cfg.creWorkflowId ? creEvmAddress(cfg.creEthPrivateKey) : undefined,
     graph: {
       schemaVersion: "3.1.0",
-      protocols: cfg.protocols.map((p) => ({ slug: p.slug, id: p.id, url: p.url })),
+      protocols: cfg.protocols.map((p) => ({ key: p.key, slug: p.slug, id: p.id, url: p.url })),
     },
   };
 }
@@ -43,7 +55,11 @@ export async function checkCreCli(
   cfg: AppConfig,
 ): Promise<{ ok: true } | { ok: false; detail: string }> {
   if (cfg.hopJoin !== "cre") return { ok: true };
-  return new Promise((resolve) => {
+  if (creReadinessCache && Date.now() - creReadinessCache.at < 30_000) {
+    return creReadinessCache.result;
+  }
+  if (creReadinessPending) return creReadinessPending;
+  creReadinessPending = new Promise((resolve) => {
     let settled = false;
     let output = "";
     const finish = (result: { ok: true } | { ok: false; detail: string }) => {
@@ -51,7 +67,7 @@ export async function checkCreCli(
       settled = true;
       resolve(result);
     };
-    const child = spawn(cfg.creCli, ["version"], {
+    const child = spawn(cfg.creCli, ["whoami"], {
       cwd: cfg.creCwd,
       shell: false,
       windowsHide: true,
@@ -59,7 +75,7 @@ export async function checkCreCli(
     });
     const timer = setTimeout(() => {
       child.kill();
-      finish({ ok: false, detail: "cre_cli_timeout" });
+      finish({ ok: false, detail: "cre_auth_check_timeout" });
     }, 10_000);
     child.stdout?.on("data", (data) => {
       output += String(data);
@@ -76,10 +92,14 @@ export async function checkCreCli(
       if (code === 0) {
         finish({ ok: true });
       } else {
-        finish({ ok: false, detail: output.trim().slice(-240) || `cre_cli_exit_${code}` });
+        finish({ ok: false, detail: output.trim().slice(-240) || `cre_whoami_exit_${code}` });
       }
     });
   });
+  const result = await creReadinessPending;
+  creReadinessCache = { at: Date.now(), result };
+  creReadinessPending = undefined;
+  return result;
 }
 
 export async function runJoin(
@@ -95,6 +115,12 @@ export async function runJoin(
   if (cfg.hopJoin === "cre") {
     onTrace("cre", "handlerInTee HTTP Nitro us-west-2");
     const cre = await simulateCre(cfg, request, onTrace);
+    for (const deployment of cre.graph.deployments) {
+      onTrace(
+        "graph",
+        `${deployment.slug ?? "subgraph"} schema ${deployment.schemaVersion} method ${deployment.methodologyVersion ?? "?"} block ${deployment.block ?? "?"} timestamp ${deployment.blockTimestamp ?? "?"} subgraph ${deployment.subgraphId ?? deployment.id}`,
+      );
+    }
     if (cfg.creWorkflowId && cfg.creEthPrivateKey) {
       try {
         const don = await triggerDeployedWorkflow(cfg, {
@@ -103,16 +129,44 @@ export async function runJoin(
           max_block_lag: request.max_block_lag,
           window: request.window,
         });
-        onTrace("cre", `DON ${don.status ?? "ACCEPTED"} ${don.execution_id ?? ""}`.trim());
-        return {
+        onTrace(
+          "cre",
+          `DON trigger ${don.status ?? "ACCEPTED"} ${don.execution_id ?? ""}; simulation result retained`.trim(),
+        );
+        const next: JoinOutcome = {
           ...cre,
           cre: {
             ...cre.cre,
-            mode: "don",
+            mode: "simulation",
             execution_id: don.execution_id,
-            artifact: don.execution_id ?? cre.cre.artifact,
+            don_status: don.status,
           },
         };
+        if (!don.execution_id) return next;
+        try {
+          const report = await fetchDonExecution(cfg, don.execution_id);
+          next.cre.don_status = report.status ?? next.cre.don_status;
+          if (report.executed_in_tee !== undefined) {
+            next.cre.don_executed_in_tee = report.executed_in_tee;
+          }
+          const expected = (next.cre.cre_commitment_hash ?? next.cre.report_hash)?.toLowerCase();
+          const observed = report.commitment_hash?.toLowerCase();
+          if (report.status === "SUCCESS" && expected && observed && expected === observed) {
+            next.cre.mode = "don";
+            onTrace("cre", `DON result matched commitment ${expected.slice(0, 12)}`);
+          } else {
+            onTrace(
+              "cre",
+              `DON result ${report.status ?? "unknown"}; commitment unmatched; mode simulation`,
+            );
+          }
+        } catch (err) {
+          onTrace(
+            "cre",
+            `DON retrieve failed ${err instanceof Error ? err.message : ""}; mode simulation`.trim(),
+          );
+        }
+        return next;
       } catch (err) {
         onTrace("cre", `DON trigger failed ${err instanceof Error ? err.message : ""}`.trim());
         return cre;
@@ -126,11 +180,11 @@ export async function runJoin(
   for (const p of snapshot.protocols) {
     onTrace(
       "graph",
-      `${p.slug} schemaVersion ${p.schemaVersion} block ${p.block ?? "?"} id ${p.deploymentId}`,
+      `${p.slug} schema ${p.schemaVersion} method ${p.methodologyVersion ?? "?"} block ${p.block ?? "?"} timestamp ${p.blockTimestamp ?? "?"} subgraph ${p.subgraphId ?? p.deploymentId}`,
     );
   }
   onTrace("cre", "HOP_JOIN=inline (same join as cre/hop-query)");
-  const joined = joinAndAggregate(policy, snapshot, request);
+  const joined = joinAndAggregate(policy, snapshot, request, cfg.policyCommitmentSalt);
   return {
     ...joined,
     aggregate: sanitizeAggregate(joined.aggregate),
@@ -147,8 +201,29 @@ async function simulateCre(
   request: QueryRequest,
   onTrace: (rail: "graph" | "cre", msg: string) => void,
 ): Promise<JoinOutcome> {
+  let release!: () => void;
+  const previous = creSimulationTail;
+  creSimulationTail = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previous;
+  try {
+    return await simulateCreUnlocked(cfg, request, onTrace);
+  } finally {
+    release();
+  }
+}
+
+async function simulateCreUnlocked(
+  cfg: AppConfig,
+  request: QueryRequest,
+  onTrace: (rail: "graph" | "cre", msg: string) => void,
+): Promise<JoinOutcome> {
   const workflowDir = path.join(cfg.creCwd, "hop-query");
-  await writeFile(path.join(workflowDir, "config.runtime.json"), JSON.stringify(creConfig(cfg, request), null, 2));
+  await writeFile(
+    path.join(workflowDir, "config.runtime.generated.json"),
+    JSON.stringify(creConfig(cfg, request), null, 2),
+  );
   await writeFile(
     path.join(workflowDir, "http-payload.json"),
     JSON.stringify({
@@ -165,7 +240,7 @@ async function simulateCre(
     "simulate",
     "hop-query",
     "--target",
-    "staging-settings",
+    "api-settings",
     "--non-interactive",
     "--trigger-index",
     "0",
@@ -228,10 +303,11 @@ async function simulateCre(
     graph: json.graph ?? { deployments: [] },
     policy: json.policy ?? { version: "unknown", threshold_hash: hashAggregate({}) },
     cre: {
-      mode: json.cre?.mode === "don" ? "don" : "simulation",
-      artifact: json.cre?.artifact ?? stdout.replace(/\s+/g, " ").slice(-1500),
+      mode: "simulation",
+      artifact: json.cre?.artifact ?? "cre-simulation",
       tee: json.cre?.tee ?? "nitro:us-west-2",
       trigger: "http",
+      cre_commitment_hash: json.cre?.cre_commitment_hash,
       report_hash: json.cre?.report_hash,
     },
   };

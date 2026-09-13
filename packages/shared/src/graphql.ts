@@ -3,14 +3,18 @@
 export const PROTOCOL_QUERY = /* GraphQL */ `
   query HopProtocol {
     _meta {
+      deployment
+      hasIndexingErrors
       block {
         number
+        timestamp
       }
     }
     lendingProtocols {
       slug
       schemaVersion
       subgraphVersion
+      methodologyVersion
       totalValueLockedUSD
       totalBorrowBalanceUSD
       totalDepositBalanceUSD
@@ -32,6 +36,11 @@ export const MARKETS_QUERY = /* GraphQL */ `
         decimals
       }
       inputTokenPriceUSD
+      rates {
+        side
+        type
+        rate
+      }
     }
   }
 `;

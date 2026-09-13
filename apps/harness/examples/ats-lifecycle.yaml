@@ -1,0 +1,35 @@
+version: "1"
+name: hop-ats-private-credit-lifecycle
+network: hedera:testnet
+mirror_node_url: https://testnet.mirrornode.hedera.com
+steps:
+  - id: ats-lifecycle
+    type: ats_lifecycle
+    asset_contract: ${ATS_ASSET_CONTRACT_ID}
+    expect:
+      created_from_factory: true
+      require_logs: true
+    transactions:
+      - stage: factory
+        transaction: ${ATS_FACTORY_TRANSACTION_ID}
+      - stage: roles
+        transaction: ${ATS_ROLE_TRANSACTION_ID}
+      - stage: compliance
+        transaction: ${ATS_COMPLIANCE_TRANSACTION_ID}
+      - stage: issue
+        transaction: ${ATS_ISSUE_TRANSACTION_ID}
+      - stage: lifecycle
+        transaction: ${ATS_LIFECYCLE_TRANSACTION_ID}
+  - id: issuance-contract-result
+    type: contract_result
+    transaction: ${ATS_ISSUE_TRANSACTION_ID}
+    expect:
+      status: SUCCESS
+      error_message: ""
+  - id: evidence-anchor
+    type: hcs_message
+    topic: ${HEDERA_HCS_TOPIC}
+    sequence: ${HCS_SEQUENCE}
+    expect:
+      json:
+        id: ${HOP_EVIDENCE_ID}
