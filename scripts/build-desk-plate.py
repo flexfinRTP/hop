@@ -1,12 +1,13 @@
 """Crop/zoom the empty desk plate and key bunny+wheel into one alpha prop."""
 from collections import deque
 from pathlib import Path
+import os
 
 import numpy as np
 from PIL import Image, ImageFilter
 
 ROOT = Path(__file__).resolve().parents[1] / "apps" / "web" / "public" / "desk"
-ASSETS = Path(r"C:\Users\gaffn\.cursor\projects\c-Appdev-etho26\assets")
+ASSETS = Path(os.environ.get("HOP_DESK_ASSETS", str(ROOT)))
 
 
 def lum(rgb):

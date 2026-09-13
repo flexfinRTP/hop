@@ -4,44 +4,44 @@ Code is complete through **0.0.67**. These steps are the only remaining work tha
 
 Do them in order. Restart the API after env changes.
 
-## Already confirmed on this machine
+## Confirm locally (do not commit machine paths or keys)
 
-| Check | Value |
+| Check | Expect |
 | --- | --- |
 | Graph Aave | live HTTP 200 |
-| Blocky402 | `feePayer` `0.0.7162784` |
-| Merchant | `0.0.10490506` |
-| Demo payer | `0.0.10490510` |
-| `HOP_DEMO_SIGN` | `1` |
+| Blocky402 | reachable `feePayer` |
+| Merchant / demo payer | funded Hedera testnet accounts from `setup:local` |
+| `HOP_DEMO_SIGN` | `1` for the desk demo signer |
 | `HOP_JOIN` | `cre` |
 | Policy table | both books `gt 0.78` |
-| `HOP_POLICY_COMMITMENT_SALT` | written to root `.env` and `cre/.env` |
-| CRE CLI | `C:\Users\gaffn\AppData\Local\Programs\cre\cre.exe` v1.33.0 |
+| `HOP_POLICY_COMMITMENT_SALT` | set in root `.env` and `cre/.env` (local only) |
+| CRE CLI | on PATH as `cre`, or set `CRE_CLI` locally |
 
 ## 1. CRE login (required for Hedera + Graph + Chainlink tape)
 
 PowerShell:
 
 ```powershell
-& "$env:LOCALAPPDATA\Programs\cre\cre.exe" login
-& "$env:LOCALAPPDATA\Programs\cre\cre.exe" whoami
+cre login
+cre whoami
 ```
+
+If `cre` is not on PATH, invoke the installer location via `$env:LOCALAPPDATA\Programs\cre\cre.exe`. Do not commit that path.
 
 `whoami` must succeed. If you use a key instead of browser login, put `CRE_API_KEY=` in root `.env` and `cre/.env` (same value). Do not commit it.
 
-Optional, so the API does not search PATH:
+Optional local override (empty in `.env.example`; API auto-discovers):
 
 ```
-CRE_CLI=C:\Users\gaffn\AppData\Local\Programs\cre\cre.exe
+CRE_CLI=
 ```
 
 ## 2. Restart API
 
-In the API terminal:
+From the repo root:
 
 ```powershell
-# Ctrl+C, then
-cd C:\Appdev\etho26
+# Ctrl+C in the API terminal, then
 npm run dev:api
 ```
 

@@ -4,11 +4,21 @@ Versions increment by `0.0.x` per feature. No dates.
 
 ## Roadmap
 
-Code complete through **0.0.76**. Public product is **verifiable decision infrastructure for agents** (finance lending policy gate as the demo vertical). Agent DX: `/docs` hub with rendered SKILL/llms + hosted Swagger; agents still fetch `/llms.txt`, `/openapi.yaml`, `/SKILL.md`. Remaining work is operator tape ([`documentation/operator.md`](documentation/operator.md)): CRE login, restart API, one paid hop, optional ATS + Sepolia.
+Code complete through **0.0.77**. Public product is **verifiable decision infrastructure for agents** (finance lending policy gate as the demo vertical). Agent DX: `/docs` hub with rendered SKILL/llms + hosted Swagger; agents still fetch `/llms.txt`, `/openapi.yaml`, `/SKILL.md`. Remaining work is operator tape ([`documentation/operator.md`](documentation/operator.md)): CRE login, restart API, one paid hop, optional ATS + Sepolia.
 
 Operator activation still requires funded testnet accounts, live Graph/CRE credentials, one paid hop on tape, and (for extra tracks) an ATS wallet lifecycle plus Sepolia `join()`. See [`documentation/README.md`](documentation/README.md).
 
 Local test bootstrap is **0.0.19** (`npm run setup:local`). Still needs you: Hedera faucet + Graph Studio API key.
+
+## 0.0.77
+
+### Removed
+
+- Local machine paths from `.env.example`, operator docs, and desk asset scripts. `CRE_CLI` stays empty; the API discovers `%LOCALAPPDATA%\Programs\cre\cre.exe` then PATH `cre`.
+
+### Next
+
+- You: `cre login`, restart API, one paid `/app` hop, video. ATS and Sepolia are extra.
 
 ## 0.0.76
 
