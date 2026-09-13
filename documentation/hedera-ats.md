@@ -1,5 +1,7 @@
 # Hedera Asset Tokenization Studio
 
+**Sunset 0.1.0.** Extra track. Archive.
+
 Hop issues and manages a testnet private-credit bond through the official `@hashgraph/asset-tokenization-sdk` **8.0.0**. The API never holds an ATS wallet key. The browser wallet signs every mutation. Mirror Node verifies consensus before an intent is marked `verified`.
 
 Extra track. Not why an enterprise buys Hop. Why: [`language.md`](language.md) (gate + receipt). ATS stays at `/assets`.

@@ -1387,6 +1387,8 @@ export function CommandCenter() {
                 <h1>Infrastructure</h1>
               </div>
               <div className="ops-head-meta">
+                <span className="ops-network">{meta?.version ?? "0.1.0"}</span>
+                <span className="ops-network">{meta?.status ?? "sunset"}</span>
                 <span className="ops-network">{meta?.network ?? "hedera:testnet"}</span>
                 <button type="button" className="ops-secondary" onClick={() => void refreshMeta()}>
                   RECHECK RAILS

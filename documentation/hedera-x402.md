@@ -1,5 +1,7 @@
 # Hedera x402
 
+**Sunset 0.1.0.** Archive.
+
 Hop is an x402 resource server. Settlement is Hedera `exact` through [Blocky402](https://blocky402.com/). Clients must use the Hedera scheme, not a generic EVM/USDC `fetchWithPayment` helper and not The Graph’s Base USDC x402 Gateway. Public `POST /v1/query` is x402, not OAuth (`GET /.well-known/oauth-protected-resource`, `oauth_on_query: false`). No API key. No login wall.
 
 Agent workflow: unpaid POST returns 402; retry with `X-PAYMENT` + `Idempotency-Key`. That is why Hop fits an agent loop — not a portal. Enterprise: public HashScan is the spend record. Why: [`language.md`](language.md).

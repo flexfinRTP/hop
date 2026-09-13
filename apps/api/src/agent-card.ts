@@ -1,4 +1,4 @@
-import { MESSARI_SCHEMA, PINNED_DEPLOYMENTS } from "@hop/shared";
+import { HOP_VERSION, MESSARI_SCHEMA, PINNED_DEPLOYMENTS } from "@hop/shared";
 import type { AppConfig } from "./config.js";
 import { hopDidFor } from "./hop-did.js";
 
@@ -13,7 +13,7 @@ export function agentCard(cfg: AppConfig, origin = "http://localhost:8787") {
     url: `${base}/v1/query`,
     preferredTransport: "HTTP",
     provider: { organization: "Hop", url: base },
-    version: "0.0.80",
+    version: HOP_VERSION,
     capabilities: { streaming: true, pushNotifications: false },
     defaultInputModes: ["application/json"],
     defaultOutputModes: ["application/json"],

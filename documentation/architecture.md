@@ -1,6 +1,6 @@
 # Architecture
 
-Enterprise: one hop in front of the irreversible tool call. Agent: 402-retry before spend, bind, or actuate. Why: [`language.md`](language.md).
+**Sunset 0.1.0.** Archive. Enterprise: one hop in front of the irreversible tool call. Agent: 402-retry before spend, bind, or actuate. Why: [`language.md`](language.md).
 
 ## Components
 

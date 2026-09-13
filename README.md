@@ -1,5 +1,7 @@
 # Hop
 
+**Sunset 0.1.0.** Archive. No further product work. How to run what shipped: [`documentation/operator.md`](documentation/operator.md). Language lock: [`documentation/language.md`](documentation/language.md).
+
 Hop is verifiable decision infrastructure for agents.
 
 A caller selects a fixed query type and one or two lending protocols (the finance demo: Aave v3 + Compound v3), pays an x402 `exact` quote on Hedera, and receives a sanitized decision plus a public evidence pack. Policy evaluation is confidential. Settlement is public. Graph data is public. The receipt says what was and was not verified.

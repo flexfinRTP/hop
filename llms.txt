@@ -1,5 +1,7 @@
 # Hop
 
+Sunset 0.1.0. Archive. GET /v1/meta returns version 0.1.0 and status sunset.
+
 Point an agent at this file (or /openapi.yaml, /SKILL.md, /documentation/README.md, /documentation/judge.md). It can pay Hedera exact x402 and call POST /v1/query in seconds. No SDK. No API key. No login.
 
 Verifiable decision infrastructure for agents. Paid HTTP 402. Fixed query types. Explicit protocol keys. Demo: lending policy gate.

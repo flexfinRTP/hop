@@ -1,5 +1,7 @@
 # Hedera Lifecycle Harness
 
+**Sunset 0.1.0.** Extra track. Archive.
+
 Declarative, read-only evidence validator for Hedera testnet transactions, contract results, HCS messages, and Asset Tokenization Studio lifecycles.
 
 The ATS validator requires five distinct successful contract transactions:

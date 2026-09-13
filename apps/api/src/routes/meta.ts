@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { LABELS, MESSARI_SCHEMA, POSTURE, QUERY_TYPES, parseMandate } from "@hop/shared";
+import { HOP_STATUS, HOP_VERSION, LABELS, MESSARI_SCHEMA, POSTURE, QUERY_TYPES, parseMandate } from "@hop/shared";
 import { loadConfig } from "../config.js";
 import { hopDidFor } from "../hop-did.js";
 import { hcsReady } from "../hcs.js";
@@ -19,6 +19,8 @@ meta.get("/", async (c) => {
   const creCli = await checkCreCli(cfg);
   return c.json({
     product: "HOP",
+    version: HOP_VERSION,
+    status: HOP_STATUS,
     labels: {
       ...LABELS,
       cre: cfg.hopJoin === "cre" ? LABELS.cre : "CRE: inline local",

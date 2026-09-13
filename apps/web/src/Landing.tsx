@@ -227,7 +227,7 @@ export function Landing() {
         <section className="home-hero">
           <p className="home-kicker">
             <i aria-hidden="true" />
-            ETHONLINE 2026 · LIVE TESTNET
+            0.1.0 SUNSET · ETHONLINE 2026
           </p>
           <h1>
             Private policy.

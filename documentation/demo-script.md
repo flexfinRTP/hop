@@ -1,6 +1,6 @@
 # 3-minute demo script
 
-Speak this next to `/app`. Do not open `/assets`. Say CRE simulation if DON is `—`.
+**Sunset 0.1.0.** Speak this next to `/app` if you still run the archive. Do not open `/assets`. Say CRE simulation if DON is `—`.
 
 **0:00–0:20 — Problem**  
 Agents can call tools and pay. The log is the model’s word. If it can move money, that is not enough.

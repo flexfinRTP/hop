@@ -29,6 +29,8 @@ export type MandateView = {
 
 export type Meta = {
   product?: string;
+  version?: string;
+  status?: string;
   network?: string;
   payTo?: string | null;
   schemaVersion?: string;

@@ -4,7 +4,7 @@
 
 If copy and code disagree, code wins and this file is amended. If a deck and this file disagree, this file wins.
 
-Live product today: finance lending policy gate. The SKU is the hop, not the vertical. Other sectors below are the same contract with a swapped warehouse — not extra products, not shipped subgraphs.
+**Sunset 0.1.0.** Archive. Finance lending policy gate is the shipped demo. The SKU is the hop, not the vertical. Other sectors below are the same contract with a swapped warehouse — not extra products, not shipped subgraphs. No further product work.
 
 ---
 
@@ -436,6 +436,7 @@ Only if the tape still shows them.
 
 | Surface | Print |
 | --- | --- |
+| Tag | **0.1.0 sunset** |
 | Network | Hedera **testnet** |
 | CRE | **SIMULATION** unless DON matches. Local simulate is not a hardware TEE |
 | Screening | OFAC not screened. KYC not performed |
@@ -443,6 +444,7 @@ Only if the tape still shows them.
 | Revenue | $0 on tape |
 | Custody | Non-custodial |
 | Regulatory | Not MSB / CASP / RIA. Not insurance. Not credit |
+| Product work | Closed. Run the archive or leave it. |
 
 ---
 
@@ -485,7 +487,7 @@ TAM/SAM/SOM in this file are **Hop planning ranges** derived from those sources,
 
 ## One-page brief
 
-**Hop.** Check. Decide. Prove.
+**Hop 0.1.0 sunset.** Check. Decide. Prove. Archive. No further product work.
 
 Agents can spend. The log is the model’s word. Gartner: 15% of work decisions autonomous by 2028, $15T of B2B through agents, and 40% of agentic projects killed for missing risk controls. The missing product is not another model. It is a gate with a receipt.
 

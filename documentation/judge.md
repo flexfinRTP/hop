@@ -1,6 +1,6 @@
 # Judge pack
 
-ETHOnline 2026. Score what is on tape. Extra tracks are extra.
+**Sunset 0.1.0.** Score what is on tape. Extra tracks are extra. ETHOnline 2026 archive.
 
 ## Open these
 
@@ -94,5 +94,6 @@ Talk track: [`demo-script.md`](demo-script.md). Operator: [`operator.md`](operat
 | 0.0.80 | Optional DID / ERC-8004. `did.json`. RFC 9728 `oauth_on_query: false`. Agent Card `securitySchemes.x402`. Meta `standards` + `hitl`. |
 | 0.0.81 | This pack + marketing/docs alignment. |
 | 0.0.82 | Pitch rewrite: Pay → Decide → Verify; Hedera / x402 / CRE / Graph layouts. |
+| **0.1.0** | Sunset tag. OpenAPI / Agent Card / `GET /v1/meta` version **0.1.0**. `status: sunset`. Hosted Vercel, cream site, pitch, docs hub through 0.0.107. |
 
 Talk track: [`demo-script.md`](demo-script.md). Operator: [`operator.md`](operator.md). Identity: [`identity.md`](identity.md).

@@ -1,6 +1,6 @@
 # Hop product implementation plan
 
-Status: **Phases A–E shipped (0.0.66–0.0.69).** Remaining core is **G operator tape**, then **F/H**. Implement in order. Each phase should stay shippable.
+Status: **Sunset 0.1.0.** Phases A–E shipped in 0.0.66–0.0.70. Hosted glue and docs through 0.0.107. No further phases. Historical text below is the closed plan, not a backlog.
 
 This is the executable spec for remaining core product / code. Do not start extra verticals, KYC, Stripe, Graph Base USDC x402, ATS-as-the-pitch, or Prova TDX unless a later review reopens them.
 
@@ -95,9 +95,9 @@ Keep: five-stage pipeline, Evidence Vault, Infrastructure, VERIFY HASHES, mandat
 
 ---
 
-## 2. Remaining core product / code (do these)
+## 2. Remaining core product / code (closed)
 
-Implement **G (operator tape)**. Phases B–E shipped in 0.0.67–0.0.69.
+**Do not implement.** Sunset 0.1.0. Operator tape, tenancy (F), and commercial hosting (H) are out of scope. Phases B–E shipped in 0.0.67–0.0.69. Text below is archive.
 
 ---
 
@@ -435,7 +435,7 @@ Hosted API, SDK, SLA, API keys, billing — after the receipt is honest. Agent D
 | Charge | `apps/api/src/routes/query.ts`, `x402.ts`, architecture.md, SKILL | D |
 | Receipt | `types.ts`, `query.ts`, OpenAPI, SKILL, MCP, `api.ts` | E |
 | Tenancy | `store.ts`, `config.ts`, CRE secrets | F |
-| Changelog | `CHANGELOG.md` — bump `0.0.x` per phase | each |
+| Changelog | `CHANGELOG.md` — closed at 0.1.0 | sunset |
 
 ---
 

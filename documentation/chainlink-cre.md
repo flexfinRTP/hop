@@ -1,5 +1,7 @@
 # Chainlink CRE confidential workflow
 
+**Sunset 0.1.0.** Archive.
+
 Hop’s join runs as a CRE Confidential Workflow. TypeScript `handlerInTee` executes on AWS Nitro (`us-west-2`). Secrets and Graph HTTP occur inside the enclave. `usingTheDons().report()` publishes a commitment, not the policy table or raw Graph payloads.
 
 Enterprise: policy caps stay sealed. That is why the limit is not in a prompt. Agent: 503 before settle if CRE is down — do not act on a ghost. Why: [`language.md`](language.md).

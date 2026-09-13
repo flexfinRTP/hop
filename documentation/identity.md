@@ -1,5 +1,7 @@
 # Identity
 
+**Sunset 0.1.0.** Archive.
+
 Hop passports are the identity control plane for agents. They are not KYC, not World ID, and not a replacement for W3C DID or ERC-8004.
 
 Enterprise: L3 binds who may hop. Default remains autonomous. Optional DID stamps the receipt — not required to pay. Agent workflow: passport is a header, not a login wall. Why: [`language.md`](language.md).

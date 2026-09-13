@@ -1,9 +1,11 @@
 ---
 name: hop-query
-description: Paid Hop decision query (finance demo: lending policy gate). Use for policy_check, market_params, position_counts, liquidations, or account_ltv over live Messari lending subgraphs. Settlement is public Hedera x402 exact (Blocky402). Policy values and Account.id are omitted from the result.
+description: Paid Hop decision query (sunset 0.1.0). Finance demo lending policy gate. Use for policy_check, market_params, position_counts, liquidations, or account_ltv over live Messari lending subgraphs. Settlement is public Hedera x402 exact (Blocky402). Policy values and Account.id are omitted from the result.
 ---
 
 # Hop query
+
+Sunset 0.1.0. Archive. Default API: `http://localhost:8787`. `GET /v1/meta` reports version 0.1.0 and status sunset.
 
 Point an agent at this skill. It can pay Hedera exact x402 and call Hop in seconds. No SDK. No API key. No login.
 

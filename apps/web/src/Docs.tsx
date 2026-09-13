@@ -25,7 +25,7 @@ const WHY = [
 
 const OPERATIONS = [
   { method: "POST", path: "/v1/query", v: "Paid decision. 402 then Hedera exact retry." },
-  { method: "GET", path: "/v1/meta", v: "Protocol keys, meter, rails, standards, hitl." },
+  { method: "GET", path: "/v1/meta", v: "0.1.0 sunset. Keys, meter, rails, standards." },
   { method: "GET", path: "/v1/evidence/{id}", v: "Public hashes. No policy values." },
   { method: "GET", path: "/v1/evidence/{id}/verify", v: "Hash, settlement, HCS, CRE tiers." },
   { method: "GET", path: "/v1/mandate", v: "Remaining budget. Does not pay." },

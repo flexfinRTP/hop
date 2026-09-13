@@ -1,5 +1,7 @@
 # Hop documentation
 
+**Sunset 0.1.0.** This directory is the technical record of the archive. No further implementation. Runbook: [`operator.md`](operator.md). Commercial lock: [`language.md`](language.md).
+
 Hop is a paid HTTP service that returns a composed decision object. The public demo vertical is finance: enumerated lending-risk queries (`policy_check` and related) over Aave v3 and Compound v3. A caller pays on Hedera, a confidential Chainlink Runtime Environment (CRE) workflow joins live protocol state from The Graph against a private policy table, and the service returns a sanitized decision plus a public evidence pack.
 
 Decision is private. Payment is public on Hedera. Data source is public on The Graph. The receipt says what was and was not verified.
@@ -15,7 +17,7 @@ Give an agent this index, `/llms.txt`, `/openapi.yaml`, or `/SKILL.md`. It integ
 | Language / commercial | [Protocol language — source of truth](language.md) |
 | Judge | [Scoreable tape + standards](judge.md) |
 | Product / operations | [Architecture](architecture.md) |
-| Next implementation | [Product implementation plan](product-implementation-plan.md) |
+| Archive plan (closed) | [Product implementation plan](product-implementation-plan.md) |
 | Operator | [Activation](operator.md) |
 | Demo tape | [3-minute script](demo-script.md) |
 | Payments | [Hedera x402](hedera-x402.md) |

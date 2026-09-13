@@ -62,7 +62,7 @@ Enterprise audit gets this pack as a link (`/verify/{id}`), not a screenshot of 
 
 `GET /v1/evidence/{id}/verify` recomputes aggregate hash, chain link, predecessor, PEAC hash, and CRE commitment shape. It also checks Hedera Mirror Node for settlement (payer, payee, amount, SUCCESS) and, when `hcs_seq` is present, the HCS topic/sequence/payload. Results cache ~60s; pass `?refresh=1` to re-query Mirror Node. Public HTML: `GET /verify/{id}` (`receipt.verify_path`).
 
-`ok` today means: local hashes match **and** public settlement (and HCS, if anchored) check out **and** CRE fields are structurally valid. `cre_ok` is **not** DON-authoritative proof by itself. `cre.mode` stays `"simulation"` until a DON execution is retrieved and the commitment hash matches. `external_settlement_verified` / `external_hcs_verified` are live Mirror Node checks as of 0.0.62.
+`ok` as of **0.1.0** means: local hashes match **and** public settlement (and HCS, if anchored) check out **and** CRE fields are structurally valid. `cre_ok` is **not** DON-authoritative proof by itself. `cre.mode` stays `"simulation"` until a DON execution is retrieved and the commitment hash matches. `external_settlement_verified` / `external_hcs_verified` are live Mirror Node checks (shipped 0.0.62).
 
 `GET /v1/evidence/{id}/verify` also returns `tiers` and meaning labels:
 

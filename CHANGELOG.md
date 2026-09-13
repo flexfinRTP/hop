@@ -1,14 +1,23 @@
 # Changelog
 
-Versions increment by `0.0.x` per feature. No dates.
+0.0.x was the build series. **0.1.0** is the sunset tag. No further feature versions.
 
-## Roadmap
+## Sunset
 
-Docs and marketing complete through **0.0.107**. Code complete through **0.0.106**. Public product is **verifiable decision infrastructure for agents** (finance lending policy gate as the demo vertical). Public loop: **Check. Decide. Prove.** Hedera x402 is the meter on the check, not pay-then-think. Commercial language is locked in [`documentation/language.md`](documentation/language.md) (why enterprise, why agent workflow, TAM/SAM/SOM, GTM). Identity: Hop passports + optional DID/ERC-8004 on the receipt. Pay rail: Hedera exact x402 (not OAuth). Remaining work is operator tape ([`documentation/operator.md`](documentation/operator.md)): CRE login, `HOP_PASSPORT_SECRET`, restart API, one paid hop, copy `/verify/{id}`.
+Hop is archived at **0.1.0**. Public product remains **verifiable decision infrastructure for agents** (finance lending policy gate as the demo vertical). Public loop: **Check. Decide. Prove.** Hedera x402 is the meter on the check. Commercial language stays in [`documentation/language.md`](documentation/language.md). Identity: Hop passports + optional DID/ERC-8004 on the receipt. Pay rail: Hedera exact x402 (not OAuth).
 
-Operator activation still requires funded testnet accounts, live Graph/CRE credentials, one paid hop on tape, and (for extra tracks) an ATS wallet lifecycle plus Sepolia `join()`. See [`documentation/README.md`](documentation/README.md).
+No roadmap. No next feature. Operator steps in [`documentation/operator.md`](documentation/operator.md) are how to run the archive, not remaining product work. Local bootstrap remains `npm run setup:local` (Hedera faucet + Graph Studio API key if you still run it).
 
-Local test bootstrap is **0.0.19** (`npm run setup:local`). Still needs you: Hedera faucet + Graph Studio API key.
+## 0.1.0
+
+### Changed
+
+- Package, OpenAPI, Agent Card, MCP, and `GET /v1/meta` all report **0.1.0**. Meta also returns `status: sunset`.
+- Docs, judge pack, language lock, implementation plan, README, `llms.txt`, SKILL, and `AI.md` mark the repo sunset. Historical 0.0.x entries below are unchanged.
+
+### Next
+
+- None. Project is sunset.
 
 ## 0.0.107
 

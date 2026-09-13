@@ -1,6 +1,6 @@
 # Operator activation
 
-Code is complete through **0.0.89**. Docs/marketing through **0.0.90**. Judges: [`judge.md`](judge.md). Why enterprise / why agent: [`language.md`](language.md). These steps are the only remaining work that requires your machine, wallet, or camera.
+**Sunset 0.1.0.** These steps run the archive. They are not remaining product work. Judges: [`judge.md`](judge.md). Why enterprise / why agent: [`language.md`](language.md).
 
 Do them in order. Restart the API after env changes.
 

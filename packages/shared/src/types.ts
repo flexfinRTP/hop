@@ -1,3 +1,7 @@
+/** Final archive tag. Hop is sunset. */
+export const HOP_VERSION = "0.1.0";
+export const HOP_STATUS = "sunset";
+
 export const QUERY_TYPES = [
   "market_params",
   "position_counts",

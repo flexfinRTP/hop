@@ -16,7 +16,8 @@ info:
     parse natural language. Policy values are omitted from the result.
     Technical reference: documentation/README.md. Why: documentation/language.md.
     Machine files also at /llms.txt and /SKILL.md.
-    version: 0.0.80
+    Archive tag 0.1.0. Hop is sunset. No further product work.
+  version: 0.1.0
 servers:
   - url: http://localhost:8787
 paths:
@@ -211,7 +212,7 @@ paths:
   /v1/meta:
     get:
       operationId: meta
-      summary: Public rails, mandate remaining, HCS, posture (no secrets, no caps)
+      summary: Public rails, mandate remaining, HCS, posture (no secrets, no caps). Includes version 0.1.0 and status sunset.
       responses:
         "200":
           description: Meta

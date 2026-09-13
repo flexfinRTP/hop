@@ -1,5 +1,7 @@
 # The Graph — standardized lending
 
+**Sunset 0.1.0.** Archive.
+
 Hop consumes **Messari Standardized Subgraphs** for Lending/CDP, schema version **3.1.0**. The same GraphQL operations run against every configured protocol. That is the intended composition: one query pattern, many protocols — not a deployed composed Subgraph (`specVersion` 1.3.0 source-subgraph indexing).
 
 Enterprise: live books on the receipt (subgraph ids, schema, block). Agent: explicit protocol keys from `GET /v1/meta` — do not invent sources. Why: [`language.md`](language.md).
