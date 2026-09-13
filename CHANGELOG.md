@@ -4,11 +4,21 @@ Versions increment by `0.0.x` per feature. No dates.
 
 ## Roadmap
 
-Docs and marketing complete through **0.0.106**. Code complete through **0.0.106**. Public product is **verifiable decision infrastructure for agents** (finance lending policy gate as the demo vertical). Public loop: **Check. Decide. Prove.** Hedera x402 is the meter on the check, not pay-then-think. Commercial language is locked in [`documentation/language.md`](documentation/language.md) (why enterprise, why agent workflow, TAM/SAM/SOM, GTM). Identity: Hop passports + optional DID/ERC-8004 on the receipt. Pay rail: Hedera exact x402 (not OAuth). Remaining work is operator tape ([`documentation/operator.md`](documentation/operator.md)): CRE login, `HOP_PASSPORT_SECRET`, restart API, one paid hop, copy `/verify/{id}`.
+Docs and marketing complete through **0.0.107**. Code complete through **0.0.106**. Public product is **verifiable decision infrastructure for agents** (finance lending policy gate as the demo vertical). Public loop: **Check. Decide. Prove.** Hedera x402 is the meter on the check, not pay-then-think. Commercial language is locked in [`documentation/language.md`](documentation/language.md) (why enterprise, why agent workflow, TAM/SAM/SOM, GTM). Identity: Hop passports + optional DID/ERC-8004 on the receipt. Pay rail: Hedera exact x402 (not OAuth). Remaining work is operator tape ([`documentation/operator.md`](documentation/operator.md)): CRE login, `HOP_PASSPORT_SECRET`, restart API, one paid hop, copy `/verify/{id}`.
 
 Operator activation still requires funded testnet accounts, live Graph/CRE credentials, one paid hop on tape, and (for extra tracks) an ATS wallet lifecycle plus Sepolia `join()`. See [`documentation/README.md`](documentation/README.md).
 
 Local test bootstrap is **0.0.19** (`npm run setup:local`). Still needs you: Hedera faucet + Graph Studio API key.
+
+## 0.0.107
+
+### Changed
+
+- Hosted glue is **CDN → Routing Rules** on the Vite project, not Settings → Rewrites. Same GitHub repo. Three Rewrite rules on **hop**, destination = hop-api URL.
+
+### Next
+
+- You: open the hop (Vite) project → CDN → Routing Rules → Add Rule → Rewrite → Publish.
 
 ## 0.0.106
 

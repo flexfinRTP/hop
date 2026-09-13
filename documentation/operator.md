@@ -166,12 +166,12 @@ Local: `npm run build` at the repo root typechecks `@hop/api` then builds `@hop/
 
 `.vercelignore` keeps `cre/`, `apps/mcp`, and `apps/harness` out of both Vercel uploads. hop-api typecheck is `apps/api/src` only.
 
-After both URLs exist, on **hop** → Settings → Rewrites:
+After both URLs exist, open the **hop** (Vite) project — not hop-api. Same GitHub repo. Then **CDN → Routing Rules → Add Rule**. Action = **Rewrite**. Publish when all three are saved.
 
 ```
-/v1/:path*              →  https://<hop-api>.vercel.app/v1/:path*
-/health                 →  https://<hop-api>.vercel.app/health
-/.well-known/:path*     →  https://<hop-api>.vercel.app/.well-known/:path*
+If path is /v1/:path*           rewrite to  https://<hop-api>.vercel.app/v1/:path*
+If path is /health              rewrite to  https://<hop-api>.vercel.app/health
+If path is /.well-known/:path*  rewrite to  https://<hop-api>.vercel.app/.well-known/:path*
 ```
 
 On **hop-api** env: copy root `.env`, then set `HOP_JOIN=inline`, `HOP_DEMO_SIGN=1`, `HOP_CORS_ORIGIN=https://<hop>.vercel.app`, `HOP_PUBLIC_BASE_URL=https://<hop-api>.vercel.app`, `DATABASE_URL` (Neon/Supabase), `DATABASE_SSL=1`. CRE CLI does not run on Vercel.
