@@ -5,18 +5,29 @@ import {
   QUERY_TYPES,
   chainHash,
   decisionReceiptFromEvidence,
+  compactIdentity,
   evaluateMandate,
+  gateBody,
   hashJson,
   hopReason,
+  isReasonCode,
+  parseDid,
+  parseErc8004,
   parseMandate,
   parsePolicyTable,
   peacFromEvidence,
   peacHash,
+  reasonCodeFromQueryStatus,
+  screeningFor,
+  verdictFromQueryStatus,
   type Evidence,
+  type IdentityReceipt,
   type Mandate,
   type QueryRequest,
   type QueryType,
+  type ReasonCode,
 } from "@hop/shared";
+import { resolvePassport } from "../passport-store.js";
 import { loadConfig, queryParams, quoteAmount, requirements } from "../config.js";
 import { cachedPublicUtil, checkGraphReadiness } from "../graph.js";
 import { submitReceiptHash } from "../hcs.js";
@@ -110,6 +121,33 @@ function resolveMandate(
     return { mandate: client };
   }
   return { mandate: server };
+}
+
+function gate(
+  error: string,
+  extra?: {
+    remaining_tinybars?: number;
+    remaining_hops?: number;
+    consumer_prompt?: string;
+    identity?: IdentityReceipt;
+    mandate?: unknown;
+    world?: "off" | "unique_human";
+  },
+) {
+  const reason: ReasonCode = isReasonCode(error) ? error : "payer_denied";
+  const verdict =
+    error === "mandate_review" ? "REVIEW" : error === "policy_breached" ? "HOLD" : "DENY";
+  return gateBody({
+    error,
+    verdict,
+    reason_code: reason,
+    world: extra?.world,
+    remaining_tinybars: extra?.remaining_tinybars,
+    remaining_hops: extra?.remaining_hops,
+    consumer_prompt: extra?.consumer_prompt,
+    identity: extra?.identity,
+    mandate: extra?.mandate,
+  });
 }
 
 export const query = new Hono();
@@ -261,7 +299,7 @@ query.post("/", async (c) => {
   const mandate = resolved.mandate;
   if (cfg.mandateRequired && !mandate) {
     emit(traceId, "hop", "mandate_required");
-    return c.json({ error: "mandate_required" }, 403);
+    return c.json(gate("mandate_required"), 403);
   }
 
   emit(traceId, "hedera", "POST Blocky402 /verify");
@@ -277,7 +315,7 @@ query.post("/", async (c) => {
   }
   const payer = verify.payer ?? "";
   if (!allowPayer(payer, cfg.payerAllowlist)) {
-    return c.json({ error: "payer_denied" }, 403);
+    return c.json(gate("payer_denied"), 403);
   }
   if (!rateOk(payer, cfg.rateLimitPerMin)) {
     return c.json({ error: "rate_limited" }, 429);
@@ -287,7 +325,7 @@ query.post("/", async (c) => {
   const worldSession = readWorldToken(cfg, worldToken);
   if (cfg.worldRequired && worldReady(cfg) && !worldSession) {
     emit(traceId, "world", "world_required");
-    return c.json({ error: "world_required" }, 403);
+    return c.json(gate("world_required"), 403);
   }
   if (worldSession) {
     emit(traceId, "world", "unique human");
@@ -394,6 +432,63 @@ query.post("/", async (c) => {
   let reserved: Mandate | null = null;
   let mandateReservationId: string | undefined;
   let decision: ReturnType<typeof evaluateMandate> | undefined;
+  let identity: IdentityReceipt | undefined;
+  const passportHeader = c.req.header("X-Hop-Passport") || c.req.header("x-hop-passport");
+  const headerDid = parseDid(c.req.header("X-Hop-Did") || c.req.header("x-hop-did"));
+  if (headerDid && "error" in headerDid) {
+    emit(traceId, "hop", "did_invalid");
+    return c.json(gate("did_invalid"), 403);
+  }
+  const header8004 = parseErc8004(c.req.header("X-Hop-Erc8004") || c.req.header("x-hop-erc8004"));
+  if (header8004 && "error" in header8004) {
+    emit(traceId, "hop", "erc8004_invalid");
+    return c.json(gate("erc8004_invalid"), 403);
+  }
+  if (cfg.passportRequired && !passportHeader) {
+    emit(traceId, "hop", "passport_required");
+    return c.json(gate("passport_required"), 403);
+  }
+  if (passportHeader) {
+    if (!cfg.passportSecret) {
+      emit(traceId, "hop", "identity_unconfigured");
+      return c.json({ error: "identity_unconfigured" }, 503);
+    }
+    const resolvedPassport = resolvePassport({
+      secret: cfg.passportSecret,
+      token: passportHeader,
+      query: parsed.query,
+    });
+    if ("error" in resolvedPassport) {
+      emit(traceId, "hop", resolvedPassport.error);
+      return c.json(gate(resolvedPassport.error), 403);
+    }
+    if (headerDid?.did && resolvedPassport.record.did && headerDid.did !== resolvedPassport.record.did) {
+      emit(traceId, "hop", "did_mismatch");
+      return c.json(gate("did_mismatch"), 403);
+    }
+    if (
+      header8004?.erc8004 &&
+      resolvedPassport.record.erc8004 &&
+      (header8004.erc8004.agent_id !== resolvedPassport.record.erc8004.agent_id ||
+        header8004.erc8004.agent_registry !== resolvedPassport.record.erc8004.agent_registry)
+    ) {
+      emit(traceId, "hop", "erc8004_mismatch");
+      return c.json(gate("erc8004_mismatch"), 403);
+    }
+    identity = compactIdentity({
+      passport_id: resolvedPassport.record.id,
+      agent_id: resolvedPassport.record.agent_id,
+      policy_root: resolvedPassport.record.policy_root,
+      did: headerDid?.did ?? resolvedPassport.record.did,
+      erc8004: header8004?.erc8004 ?? resolvedPassport.record.erc8004,
+    });
+    emit(traceId, "hop", `passport ${identity?.passport_id}`);
+  } else {
+    identity = compactIdentity({
+      did: headerDid?.did,
+      erc8004: header8004?.erc8004,
+    });
+  }
   if (mandate) {
     const now = Date.now();
     const bound = mandate.pay_to ? mandate : { ...mandate, pay_to: cfg.payTo };
@@ -406,13 +501,33 @@ query.post("/", async (c) => {
       spentTinybars: getSpend(bound.id).spent_tinybars,
       hopsInWindow: hopsInWindow(bound.id, bound.window_s, now),
       confirmed: c.req.header("X-Hop-Confirm") === "1" || c.req.header("x-hop-confirm") === "1",
+      passportOk: Boolean(identity),
+      passportAgentId: identity?.agent_id,
+      passportPolicyRoot: identity?.policy_root,
     });
     emit(traceId, "hop", `${decision.result} ${decision.reason}`);
     if (decision.result === "DENY") {
-      return c.json({ error: decision.reason, mandate: decision }, 403);
+      return c.json(
+        gate(decision.reason, {
+          remaining_tinybars: decision.remaining_tinybars,
+          remaining_hops: decision.remaining_hops,
+          identity,
+          mandate: decision,
+        }),
+        403,
+      );
     }
     if (decision.result === "REVIEW") {
-      return c.json({ error: "mandate_review", mandate: decision }, 403);
+      return c.json(
+        gate("mandate_review", {
+          remaining_tinybars: decision.remaining_tinybars,
+          remaining_hops: decision.remaining_hops,
+          consumer_prompt: bound.assurance?.consumer_prompt,
+          identity,
+          mandate: decision,
+        }),
+        403,
+      );
     }
     reserved = bound;
     mandateReservationId = reserveMandate(bound.id, amountN, now);
@@ -496,6 +611,10 @@ query.post("/", async (c) => {
     settlement: { ref: settlementRef },
     cre: joined.cre,
     status: joined.status,
+    verdict: verdictFromQueryStatus(joined.status),
+    reason_code: reasonCodeFromQueryStatus(joined.status),
+    screening: screeningFor(worldSession ? "unique_human" : "off"),
+    identity,
     hcs_seq: undefined,
     world: worldSession ? { nullifier_hash: hashNullifier(worldSession.nullifier_hash) } : undefined,
     mandate: reserved && decision

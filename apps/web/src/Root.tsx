@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { CommandCenter } from "./CommandCenter";
 import { Docs } from "./Docs";
 import { Landing } from "./Landing";
+import { VerifyPage } from "./VerifyPage";
 
 const TokenizationStudio = lazy(() =>
   import("./TokenizationStudio").then((module) => ({ default: module.TokenizationStudio })),
@@ -35,7 +36,9 @@ export function Root() {
           ? "Hop · ATS"
           : path === "/docs" || path.startsWith("/docs/")
             ? "Hop · Docs"
-            : "Hop";
+            : path.startsWith("/verify/")
+              ? "Hop · Verify"
+              : "Hop";
   }, [path]);
 
   useEffect(() => {
@@ -45,6 +48,7 @@ export function Root() {
   }, [path]);
 
   if (path === "/docs" || path.startsWith("/docs/")) return <Docs />;
+  if (path.startsWith("/verify/")) return <VerifyPage />;
   if (path === "/app" || path === "/desk") return <CommandCenter />;
   if (path === "/assets") {
     return (

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 312 100" fill="currentColor" role="img" aria-label="HOP">
+  <title>HOP</title>
+  <rect x="0" y="0" width="17" height="100" rx="4"/>
+  <rect x="63" y="0" width="17" height="100" rx="4"/>
+  <rect x="0" y="41" width="80" height="17" rx="4"/>
+  <path fill-rule="evenodd" d="M108 50a50 50 0 1 0 100 0a50 50 0 1 0-100 0m17 0a33 33 0 1 0 66 0a33 33 0 1 0-66 0"/>
+  <rect x="236" y="0" width="17" height="100" rx="4"/>
+  <path fill-rule="evenodd" d="M236 38a38 38 0 1 0 76 0a38 38 0 1 0-76 0m17 0a21 21 0 1 0 42 0a21 21 0 1 0-42 0"/>
+</svg>

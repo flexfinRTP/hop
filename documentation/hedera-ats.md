@@ -2,6 +2,8 @@
 
 Hop issues and manages a testnet private-credit bond through the official `@hashgraph/asset-tokenization-sdk` **8.0.0**. The API never holds an ATS wallet key. The browser wallet signs every mutation. Mirror Node verifies consensus before an intent is marked `verified`.
 
+Extra track. Not why an enterprise buys Hop. Why: [`language.md`](language.md) (gate + receipt). ATS stays at `/assets`.
+
 Official sources: [ATS monorepo](https://github.com/hashgraph/asset-tokenization-studio), [SDK 8.0.0](https://www.npmjs.com/package/@hashgraph/asset-tokenization-sdk), [v8 testnet deployment JSON](https://github.com/hashgraph/asset-tokenization-studio/blob/main/packages/ats/contracts/deployments/hedera-testnet/newBlr-2026-06-12T11-19-42-198.json).
 
 Do not use the stale v4 addresses from older SDK guides (`0.0.7707874` / `0.0.7708432`).

@@ -7,23 +7,32 @@ const AGENT_FILES = [
   { n: "01", k: "llms.txt", v: "Routes, 402, query types", href: "/docs/llms", file: "/llms.txt" },
   { n: "02", k: "OpenAPI", v: "HTTP contract", href: "/docs/api", file: "/openapi.yaml" },
   { n: "03", k: "SKILL", v: "Hedera exact retry", href: "/docs/skill", file: "/SKILL.md" },
-  { n: "04", k: "Agent Card", v: "A2A discovery", href: "/.well-known/agent-card.json", file: "/.well-known/agent-card.json" },
+  { n: "04", k: "Agent Card", v: "A2A + x402", href: "/.well-known/agent-card.json", file: "/.well-known/agent-card.json" },
+  { n: "05", k: "DID", v: "did:web document", href: "/.well-known/did.json", file: "/.well-known/did.json" },
 ] as const;
 
 const STEPS = [
-  { n: "01", k: "Point the agent", v: "Give it llms.txt, OpenAPI, or SKILL." },
+  { n: "01", k: "Point the agent", v: "Give it llms.txt, OpenAPI, SKILL, or DID. No login." },
   { n: "02", k: "It maps the ask", v: "Fixed query type + protocol keys from /v1/meta." },
   { n: "03", k: "It pays Hedera", v: "HTTP 402 → exact x402 retry. No API key." },
   { n: "04", k: "It uses the result", v: "Decision stamp + public receipt." },
 ] as const;
 
+const WHY = [
+  { n: "ENTERPRISE", k: "Uninsured process without a receipt", v: "Gate before value moves. Audit gets /verify/{id}." },
+  { n: "AGENT", k: "Tool call before the irreversible call", v: "One 402-retry. Then spend, bind, or actuate." },
+] as const;
+
 const OPERATIONS = [
   { method: "POST", path: "/v1/query", v: "Paid decision. 402 then Hedera exact retry." },
-  { method: "GET", path: "/v1/meta", v: "Protocol keys, meter, rails, agent file URLs." },
+  { method: "GET", path: "/v1/meta", v: "Protocol keys, meter, rails, standards, hitl." },
   { method: "GET", path: "/v1/evidence/{id}", v: "Public hashes. No policy values." },
   { method: "GET", path: "/v1/evidence/{id}/verify", v: "Hash, settlement, HCS, CRE tiers." },
   { method: "GET", path: "/v1/mandate", v: "Remaining budget. Does not pay." },
-  { method: "GET", path: "/.well-known/agent-card.json", v: "A2A discovery card." },
+  { method: "GET", path: "/v1/identity/passports", v: "Issue, bind, revoke Hop passports." },
+  { method: "GET", path: "/verify/{id}", v: "Public receipt page. Verdict + screening + HCS." },
+  { method: "GET", path: "/.well-known/did.json", v: "W3C did:web for this origin." },
+  { method: "GET", path: "/.well-known/oauth-protected-resource", v: "RFC 9728. Query is x402, not OAuth." },
 ] as const;
 
 const MACHINE_PAGES: Record<string, { kicker: string; title: string; fetch: string; raw: string }> = {
@@ -89,6 +98,12 @@ export function Docs() {
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
+
+  useEffect(() => {
+    if (slug !== "judge" && slug !== "judge.md") return;
+    history.replaceState({}, "", "/docs");
+    setSlug("");
+  }, [slug]);
 
   useEffect(() => {
     if (!sourcePath) {
@@ -161,7 +176,7 @@ export function Docs() {
               <h1>Point your agent at these files.</h1>
               <p className="docs-lead">
                 It pays Hedera exact x402 and uses the decision API in seconds. No SDK. No API
-                key. No handwritten client.
+                key. No login. No handwritten client. Optional DID stamps the receipt.
               </p>
               <div className="docs-file-grid">
                 {AGENT_FILES.map((file) => (
@@ -174,6 +189,15 @@ export function Docs() {
                       </a>
                       <CopyPath path={file.file} />
                     </div>
+                  </article>
+                ))}
+              </div>
+              <div className="docs-steps">
+                {WHY.map((item) => (
+                  <article key={item.n}>
+                    <span>{item.n}</span>
+                    <strong>{item.k}</strong>
+                    <em>{item.v}</em>
                   </article>
                 ))}
               </div>

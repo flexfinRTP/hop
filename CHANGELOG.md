@@ -4,11 +4,301 @@ Versions increment by `0.0.x` per feature. No dates.
 
 ## Roadmap
 
-Code complete through **0.0.77**. Public product is **verifiable decision infrastructure for agents** (finance lending policy gate as the demo vertical). Agent DX: `/docs` hub with rendered SKILL/llms + hosted Swagger; agents still fetch `/llms.txt`, `/openapi.yaml`, `/SKILL.md`. Remaining work is operator tape ([`documentation/operator.md`](documentation/operator.md)): CRE login, restart API, one paid hop, optional ATS + Sepolia.
+Docs and marketing complete through **0.0.102**. Code complete through **0.0.101**. Public product is **verifiable decision infrastructure for agents** (finance lending policy gate as the demo vertical). Public loop: **Check. Decide. Prove.** Hedera x402 is the meter on the check, not pay-then-think. Commercial language is locked in [`documentation/language.md`](documentation/language.md) (why enterprise, why agent workflow, TAM/SAM/SOM, GTM). Identity: Hop passports + optional DID/ERC-8004 on the receipt. Pay rail: Hedera exact x402 (not OAuth). Remaining work is operator tape ([`documentation/operator.md`](documentation/operator.md)): CRE login, `HOP_PASSPORT_SECRET`, restart API, one paid hop, copy `/verify/{id}`.
 
 Operator activation still requires funded testnet accounts, live Graph/CRE credentials, one paid hop on tape, and (for extra tracks) an ATS wallet lifecycle plus Sepolia `join()`. See [`documentation/README.md`](documentation/README.md).
 
 Local test bootstrap is **0.0.19** (`npm run setup:local`). Still needs you: Hedera faucet + Graph Studio API key.
+
+## 0.0.102
+
+### Changed
+
+- Public `/` and `/docs` no longer surface the judge pack. Sidebar, file cards, and marketing CTAs dropped. `/docs/judge` redirects to `/docs`. `documentation/judge.md` is unchanged.
+
+### Next
+
+- You: hard-refresh `/` and `/docs`. Operator tape unchanged.
+
+## 0.0.102
+
+### Added
+
+- Cream site background: faint moss grid plus two node paths. A packet hops agent → Hop → tool (`offset-path`, 9s, staggered). CSS only. `prefers-reduced-motion` keeps the grid and stills the pulse.
+
+### Next
+
+- You: hard-refresh `/` and `/docs`. Operator tape unchanged.
+
+## 0.0.101
+
+### Fixed
+
+- Pitch images were JPEG bytes saved as `.png`. Vite served `image/png` with `nosniff`, so every generated still broke. Renamed deck stills to `.jpg` and sniff `/brand/` image bytes in Vite so the rest of the generated brand photos load.
+
+### Next
+
+- You: hard-refresh `/pitch.html`. Operator tape unchanged.
+
+## 0.0.100
+
+### Changed
+
+- Header/footer partner marks: official World ID logomark. White chips removed from Hedera, Chainlink, The Graph.
+
+### Next
+
+- You: hard-refresh `/`. Operator tape unchanged.
+
+## 0.0.99
+
+### Changed
+
+- Live hop theater stays inside the viewport on every width: padded overlay, no `92vw` overflow, container queries stack stream/receipt, log lines wrap on narrow screens. CLOSE is red. Event lines unfurl downward (`clip-path` + height). Close is a 140ms blur dissolve.
+
+### Next
+
+- You: hard-refresh `/app`, RUN LIVE DECISION, resize the window. Operator tape unchanged.
+
+## 0.0.98
+
+### Changed
+
+- Wordmark is the generated ligature PNGs (not the SVG trace). Header is a moss ticket stub + cream rail with official Hedera, Chainlink, The Graph, World ID marks. Footer is a moss built-on strip with those same marks.
+
+### Next
+
+- Logo mark to pair with this wordmark.
+
+## 0.0.97
+
+### Changed
+
+- `/pitch.html` restyle on marketing brand: cream `#f3eee4`, moss `#245c4a`, ink `#1a1915`, Newsreader + Geist, moss wordmark. Unique layout per slide (billboard cover, overlapping magazine stakes, staggered hop stills, Hedera stamp, x402 clip, industrial workflow, circular vault, Graph mosaic, Stripe number wall, buyer photo grid, receipt still life, close stamp). Brand-palette generated images plus editorial photographs on every slide. Same public FOMO copy.
+
+### Next
+
+- You: hard-refresh `/pitch.html`. Save PDF with headers/footers off. Operator tape unchanged.
+
+## 0.0.96
+
+### Added
+
+- Homepage `#flow`: how Hop plugs into an existing agent loop. Two paths — already on x402 (one more 402 resource) and MCP / no x402 (one skill: `hop_meta` → `hop_pay`). Custom cream/moss diagrams in `apps/web/public/brand/flow/`. HTML steps stay the labels. You do not replace the platform.
+
+### Next
+
+- You: hard-refresh `/`, open In the loop, switch tabs. Operator tape unchanged.
+
+## 0.0.95
+
+### Changed
+
+- Live wordmark is the HO ligature (italic monoline; O is the right stem of H). Moss `#245c4a` on cream and cream `#f3eee4` on moss. `/`, `/docs`, `/app`, `/verify`, `/assets`, desk, theater, `/pitch.html`.
+
+### Next
+
+- Logo mark to pair with this wordmark.
+
+## 0.0.94
+
+### Changed
+
+- Public 1-2-3 is **Check. Decide. Prove.** — not Pay → Decide → Verify. Homepage `#how`: check the rule before spend/book/ship, allow or hold, keep the receipt. Note: Hedera x402 meters the check. Locked in [`documentation/language.md`](documentation/language.md). Pitch cover + hop towers match.
+
+### Next
+
+- You: hard-refresh `/`, `/pitch.html`. Operator tape unchanged.
+
+## 0.0.93
+
+### Changed
+
+- `/pitch.html` public FOMO rewrite. Story: stakes → hop → Hedera pay → x402 → workflow → Chainlink sealed policy → Graph live books → $15T market → buyers → live receipt → close. Generated images on every slide (`apps/web/public/brand/pitch/`). Stripped finance-demo, judge pack, terminals, RFC/spec tables, competitor names, internal docs.
+
+### Next
+
+- You: open `/pitch.html`, Save PDF with headers/footers off. Operator tape unchanged.
+
+## 0.0.92
+
+### Changed
+
+- Locked wordmark: dual-bar H, circular O, circular-bowl P. Colorways cream `#f3eee4` on moss and moss `#245c4a` on cream. Applied on `/`, `/docs`, `/app`, `/verify`, `/assets`, desk, live theater, and `/pitch.html`.
+
+### Next
+
+- Logo mark to pair with this wordmark.
+
+## 0.0.91
+
+### Added
+
+- `/app` live hop theater: RUN opens a side-by-side overlay immediately with the real SSE `/v1/events/{id}` stream and the receipt filling from that hop. Motion (`motion/react`) springs for overlay and log lines. Existing decision room, bottom stream, approve, export, HashScan, and verify stay in place. Reopen from LIVE HOP.
+
+### Changed
+
+- Trace redaction covers home paths, emails, JWTs, `.env`, and key material. CRE CLI invoke no longer logs the binary or env file path. Display-side mask matches the server.
+
+### Next
+
+- You: `npm install` at repo root if `motion` is missing, restart web, RUN LIVE DECISION. Operator tape unchanged.
+
+## 0.0.90
+
+### Added
+
+- Why enterprise / why agent workflow on README, `/docs/language`, judge, agents, SKILL, `llms.txt`, OpenAPI, Agent Card, architecture, evidence, identity, x402, Graph, CRE, ATS/liquidation (extra, not the SKU), operator, implementation plan, pitch (loop / integrate / close), `/` product labels, `/docs` hub.
+
+### Next
+
+- You: operator tape ([`documentation/operator.md`](documentation/operator.md)). Hard-refresh `/`, `/docs`, `/pitch.html`. Wordmark pick A/B still open.
+
+## 0.0.89
+
+### Changed
+
+- Wordmark P is now a circular bowl on a stem (reference construction), not a flat D. Live on `/`, `/docs`, `/app`, `/verify`, `/pitch.html`.
+
+### Added
+
+- Alternate wordmark (not live): classic single-bar H, no Hedera double-bar. `apps/web/public/brand/hop-wordmark-alt*.svg`.
+
+### Next
+
+- Pick A (live, dual-bar H) or B (alt, single-bar H). Then logo mark.
+
+## 0.0.88
+
+### Added
+
+- [`documentation/language.md`](documentation/language.md): **Why an enterprise uses this** and **Why it goes in the agent workflow**. Locked lines + demo-script product beat. Enterprise: uninsured process without a receipt. Agent: tool call before the irreversible tool call.
+
+### Next
+
+- Use these two answers in pitch, partner, and sales. Operator tape unchanged.
+
+## 0.0.87
+
+### Changed
+
+- Public site rebuilt from Stripe / Linear / Clerk / WorkOS / Resend layout, not a card template. Hero is a Decision Room window. Product is three interfaces (books, 402 terminal, verify). Stack is Linear-style figures. Controls are a settings desk. Integrate is a file editor. Geist. Same copy and routes.
+
+### Next
+
+- You: hard-refresh `/`, `/docs`. Operator tape unchanged.
+
+## 0.0.86
+
+### Changed
+
+- [`documentation/language.md`](documentation/language.md) rewrite in pitch voice. Blue-ocean buyer = operator who owns the threshold (CRO / VP Ops / CISO / CUO / CPO), not agent platforms alone. Sector use cases (finance, insurance, industrial, energy, logistics, procurement, CRE/facilities, telecom, retail). Sourced TAM ~$8–12B / SAM ~$1.5–2.5B / SOM $0-until-hosted. Dual-motion GTM. Parent markets ($15T, $202B) not claimed as Hop TAM.
+
+### Next
+
+- Keep finance as the live demo. Do not ship extra warehouses until a design partner exists. Operator tape unchanged.
+
+## 0.0.85
+
+### Changed
+
+- Public site redesign on cream `#f3eee4` and moss `#245c4a`: Newsreader headlines, receipt hero with moss offset, inverted product card, 2×2 proof stack, sticky nav with mobile menu. Same copy, links, and pages (`/`, `/docs`, `/verify/{id}`). Decision room `/app` unchanged.
+
+### Next
+
+- You: open `/`, `/docs`, `/docs/judge`, `/verify/{id}` if you have a receipt. Operator tape unchanged.
+
+## 0.0.84
+
+### Added
+
+- Protocol language source of truth: [`documentation/language.md`](documentation/language.md). Category, FOMO, provide/never, trust split, competitive frame vs attest-after, locked lines, forbidden claims. Indexed from README, docs hub, implementation plan, `llms.txt`, `AI.md`.
+
+### Next
+
+- Use this file for pitch, partner, and investor copy. Do not paste narrative onto product UI. Operator tape unchanged.
+
+## 0.0.83
+
+### Added
+
+- HOP wordmark: constructed H (dual crossbar, Hedera nod), circular O, geometric P. Colorways cream `#f3eee4` and moss `#245c4a` (product brand, not deck lime). Assets in `apps/web/public/brand/hop-wordmark*.svg`. Live on `/`, `/docs`, `/app`, `/verify`, `/pitch.html`.
+
+### Next
+
+- Logo mark to pair with the wordmark.
+
+## 0.0.82
+
+### Changed
+
+- Pitch `/pitch.html` full visual and copy rewrite. New type (Syne / DM Mono), black–lime–rail colors, unique layout per slide. Loop is **Pay → Decide → Verify**. Claims: Built on Hedera, standardized for x402, agent in seconds, Chainlink CRE confidential compute, data warehouses starting with The Graph. Close: Don’t trust the agent. Trust the receipt.
+
+### Next
+
+- You: open `/pitch.html`, Save PDF with headers/footers off. Operator tape unchanged.
+
+## 0.0.81
+
+### Added
+
+- Judge pack [`documentation/judge.md`](documentation/judge.md) at `/docs/judge`: scoreable tape, standards table, not-claimed list, 3-minute steps. Agent Card `agent_docs.judge`. Meta documentation index includes `judge`.
+- Marketing `/` and `/docs`: DID, Agent Card, NO LOGIN, VERIFY LINK, Judge nav and file cards.
+- Pitch `/pitch.html`: optional DID on the receipt, RFC 9728 x402-not-OAuth, Judge pack CTA.
+
+### Changed
+
+- Architecture, evidence, identity, agents, Hedera x402, demo script, README, `llms.txt`, SKILL, and `AI.md` match shipped 0.0.78–0.0.80: verdicts, `/verify/{id}`, passports, optional DID/ERC-8004, public query stays x402.
+
+### Next
+
+- You: set `HOP_PASSPORT_SECRET`, `cre login`, restart API, one paid `/app` hop, HashScan + `/verify/{id}`, optional passport or `X-Hop-Did`. ATS and Sepolia extra.
+
+## 0.0.80
+
+### Added
+
+- Optional caller DID (`X-Hop-Did`) and ERC-8004 pointer (`X-Hop-Erc8004`) on passports and `hop.decision.v1` identity. Syntax-checked. Not required to pay.
+- W3C `did:web` document at `GET /.well-known/did.json`. RFC 9728 `GET /.well-known/oauth-protected-resource` with `oauth_on_query: false`.
+- A2A Agent Card `securitySchemes.x402`. ERC-8004 registration includes a DID service. Meta `standards` + `hitl` flags (autonomous default; L2 confirm; World uniqueness).
+
+### Changed
+
+- OpenAPI / Agent Card 0.0.79 → 0.0.80 discovery paths. Public HTTP query remains x402-only.
+
+### Next
+
+- You: restart API, open `/.well-known/did.json` and `/v1/meta` `standards`. Optional: send `X-Hop-Did` on a paid hop and confirm `/verify/{id}` shows DID.
+
+## 0.0.79
+
+### Changed
+
+- Pitch deck `/pitch.html`: judge-facing labels and scoreable claims; dropped internal jargon from public copy. Distinct visual compositions (receipt, live terminals, rubber-stamp record, partner rails). IBM Plex Serif display, grain, orbit, perforated receipt, print-safe.
+
+### Next
+
+- You: set `HOP_PASSPORT_SECRET`, `cre login`, restart API, one paid `/app` hop, HashScan + `/verify/{id}`, optional passport issue. ATS and Sepolia extra.
+
+## 0.0.78
+
+### Added
+
+- Decision vocabulary on every paid receipt and 403 gate: `ALLOW` / `HOLD` / `DENY` / `REVIEW` plus `reason_code`.
+- Honest `screening` on `hop.decision.v1` (`ofac: not_screened`, `kyc: not_performed`, World uniqueness when used).
+- Public verify page `/verify/{id}` and `receipt.verify_path`. Copy link from `/app`.
+- Hop passports: HMAC tokens, Postgres/file store, `X-Hop-Passport`, bind/revoke, MCP tools, `/app` issue/revoke.
+- Mandate `assurance` (L1 operator / L2 human threshold / L3 passport-bound) — TAP-shaped spend delegation on Hedera x402.
+- Pitch deck `/pitch.html`. Demo talk track `documentation/demo-script.md`. Identity docs `documentation/identity.md`.
+
+### Changed
+
+- Receipt names the pay rail `hedera_x402_exact`. Meta exposes `rails` + `identity`. 403 bodies include remaining budget and `consumer_prompt` on review.
+- OpenAPI 0.0.78 identity paths and receipt fields. Agent Card 0.0.78.
+
+### Next
+
+- You: set `HOP_PASSPORT_SECRET`, `cre login`, restart API, one paid `/app` hop, HashScan + `/verify/{id}`, optional passport issue. ATS and Sepolia extra.
 
 ## 0.0.77
 

@@ -2,6 +2,8 @@
 
 Hop consumes **Messari Standardized Subgraphs** for Lending/CDP, schema version **3.1.0**. The same GraphQL operations run against every configured protocol. That is the intended composition: one query pattern, many protocols — not a deployed composed Subgraph (`specVersion` 1.3.0 source-subgraph indexing).
 
+Enterprise: live books on the receipt (subgraph ids, schema, block). Agent: explicit protocol keys from `GET /v1/meta` — do not invent sources. Why: [`language.md`](language.md).
+
 Official schema: [Standardized Subgraphs](https://thegraph.com/docs/en/subgraphs/existing-subgraphs/standard-subgraphs/), [Messari `schema-lending.graphql`](https://github.com/messari/subgraphs/blob/master/schema-lending.graphql), [SCHEMA.md](https://github.com/messari/subgraphs/blob/master/docs/SCHEMA.md).
 
 Live data is required. Queries go to The Graph Gateway with a Subgraph Studio API key. Mock JSON, a local Graph Node, or a static fixture is not a valid data path.

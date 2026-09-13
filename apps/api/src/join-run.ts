@@ -249,7 +249,7 @@ async function simulateCreUnlocked(
     "--env",
     envFile,
   ];
-  onTrace("cre", `${cfg.creCli} ${args.join(" ")}`);
+  onTrace("cre", "cre workflow simulate hop-query --target api-settings --non-interactive");
 
   const stdout = await new Promise<string>((resolve, reject) => {
     const child = spawn(cfg.creCli, args, {

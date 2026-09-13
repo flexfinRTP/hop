@@ -154,9 +154,9 @@ function parseAssurance(raw: unknown, humanThreshold: number): MandateAssurance 
 }
 
 function defaultPrompt(kind: MandateAssuranceKind): string {
-  if (kind === "passport_bound") return "Confirm spend for this passport-bound mandate.";
-  if (kind === "human_threshold") return "Confirm payment above the human threshold.";
-  return "Operator-issued spend mandate.";
+  if (kind === "passport_bound") return "X-Hop-Confirm + valid X-Hop-Passport";
+  if (kind === "human_threshold") return "X-Hop-Confirm: 1";
+  return "L1 operator mandate";
 }
 
 export function mandateHash(mandate: Mandate): string {
@@ -183,10 +183,11 @@ export function evaluateMandate(mandate: Mandate, ctx: MandateContext): MandateD
   if (assurance?.kind === "passport_bound" && !ctx.passportOk) {
     return deny("passport_required");
   }
-  if (ctx.passportOk && ctx.passportAgentId && ctx.passportAgentId !== mandate.agent_id) {
+  if (assurance?.kind === "passport_bound" && ctx.passportAgentId && ctx.passportAgentId !== mandate.agent_id) {
     return deny("passport_agent");
   }
   if (
+    assurance?.kind === "passport_bound" &&
     ctx.passportOk &&
     ctx.passportPolicyRoot &&
     ctx.passportPolicyRoot !== hash

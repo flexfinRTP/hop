@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { LABELS, MESSARI_SCHEMA, POSTURE, QUERY_TYPES, parseMandate } from "@hop/shared";
 import { loadConfig } from "../config.js";
+import { hopDidFor } from "../hop-did.js";
 import { hcsReady } from "../hcs.js";
 import { checkCreCli } from "../join-run.js";
 import { getSpend, hopsInWindow, storeHealth } from "../store.js";
@@ -39,6 +40,10 @@ meta.get("/", async (c) => {
       "hop_evidence",
       "hop_peac",
       "hop_verify",
+      "hop_passport_issue",
+      "hop_passport_get",
+      "hop_passport_bind",
+      "hop_passport_revoke",
       "hop_world_rp_context",
       "hop_world_verify",
     ],
@@ -119,6 +124,48 @@ meta.get("/", async (c) => {
       rp_id: cfg.worldRpId || null,
       action: cfg.worldAction,
       environment: cfg.worldEnvironment,
+    },
+    identity: {
+      ready: Boolean(cfg.passportSecret),
+      required: cfg.passportRequired,
+      header: "X-Hop-Passport",
+      issue: "/v1/identity/passports",
+      did_header: "X-Hop-Did",
+      erc8004_header: "X-Hop-Erc8004",
+    },
+    hitl: {
+      default: "autonomous",
+      mandate_review:
+        Boolean(template && template.human_threshold_tinybars > 0) ||
+        template?.assurance?.kind === "human_threshold",
+      world: cfg.worldRequired,
+      confirm_header: "X-Hop-Confirm",
+      world_header: "X-Hop-World",
+    },
+    standards: {
+      x402: { version: 2, query_auth: "x402_only" },
+      a2a: { protocolVersion: "0.2.9", card: "/.well-known/agent-card.json" },
+      mcp: { spec: "2025-06-18", transport: "stdio", oauth_on_query: false },
+      did: { method: "did:web", document: "/.well-known/did.json" },
+      erc8004: {
+        type: "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+        registration: "/.well-known/agent-registration.json",
+      },
+      peac: "peac-shaped/hop-0.1",
+      tap_assurance: ["L1", "L2", "L3"],
+      world_id: cfg.worldRequired ? "required_uniqueness" : "optional_uniqueness",
+      oauth: {
+        on_public_query: false,
+        protected_resource: "/.well-known/oauth-protected-resource",
+      },
+    },
+    rails: {
+      pay: "hedera_x402_exact",
+      decide: cfg.hopJoin === "cre" ? "cre_handlerInTee" : "inline_join",
+      verify: "/v1/evidence/{id}/verify",
+      verify_page: "/verify/{id}",
+      identity: "hop.passport.v1",
+      did: hopDidFor(cfg, (cfg.publicBaseUrl || "http://localhost:8787").replace(/\/$/, "")),
     },
   });
 });

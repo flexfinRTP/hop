@@ -6,14 +6,17 @@ info:
     in seconds: unpaid POST /v1/query returns 402, retry with X-PAYMENT. No
     API key. Human docs: /docs. Swagger: /swagger.html. Verifiable decision
     infrastructure for agents. Demo vertical: paid lending policy queries.
+    Put this call before the tool that spends, binds, or actuates — the tool
+    call before the tool call that cannot be undone. Enterprise: an agent that
+    can move value without a receipt is an uninsured process.
     Settlement is public Hedera x402 `exact` via Blocky402.
     Data is Messari Lending/CDP schema 3.1.0 from The Graph Gateway. The join
     runs in a Chainlink CRE `handlerInTee` workflow (simulation unless a DON
     result is retrieved and matched). Query types are enumerated; Hop does not
     parse natural language. Policy values are omitted from the result.
-    Technical reference: documentation/README.md. Machine files also at
-    /llms.txt and /SKILL.md.
-  version: 0.0.70
+    Technical reference: documentation/README.md. Why: documentation/language.md.
+    Machine files also at /llms.txt and /SKILL.md.
+    version: 0.0.80
 servers:
   - url: http://localhost:8787
 paths:
@@ -24,6 +27,45 @@ paths:
       responses:
         "200":
           description: Agent Card JSON
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /.well-known/agent-registration.json:
+    get:
+      operationId: agentRegistration
+      summary: ERC-8004 registration-v1 metadata
+      responses:
+        "200":
+          description: Registration JSON
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /.well-known/did.json:
+    get:
+      operationId: didDocument
+      summary: W3C did:web document for this Hop origin
+      responses:
+        "200":
+          description: DID document (service endpoints only; no fabricated verification keys)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /.well-known/oauth-protected-resource:
+    get:
+      operationId: oauthProtectedResource
+      summary: RFC 9728 protected resource metadata
+      description: |
+        Enterprise discovery. Public POST /v1/query is x402, not OAuth.
+        authorization_servers is empty on purpose.
+      responses:
+        "200":
+          description: Protected resource metadata
           content:
             application/json:
               schema:
@@ -62,6 +104,24 @@ paths:
           in: header
           required: false
           description: World ID session token from POST /v1/world/verify. Required when WORLD_REQUIRED=1.
+          schema:
+            type: string
+        - name: X-Hop-Passport
+          in: header
+          required: false
+          description: Hop passport token from POST /v1/identity/passports. Required when HOP_PASSPORT_REQUIRED=1.
+          schema:
+            type: string
+        - name: X-Hop-Did
+          in: header
+          required: false
+          description: Optional W3C DID (syntax-checked). Stamps receipt.identity.did. Not required to pay.
+          schema:
+            type: string
+        - name: X-Hop-Erc8004
+          in: header
+          required: false
+          description: Optional ERC-8004 pointer JSON {agentId,agentRegistry} or agentId;registry. Stamps receipt.identity.erc8004. Not required to pay.
           schema:
             type: string
       requestBody:
@@ -170,6 +230,75 @@ paths:
           description: Mandate inspect
         "404":
           description: mandate_missing
+  /v1/identity/passports:
+    get:
+      operationId: listPassports
+      summary: List issued agent passports (no tokens)
+      responses:
+        "200":
+          description: Passport list
+        "503":
+          description: identity_unconfigured
+    post:
+      operationId: issuePassport
+      summary: Issue a MAC-signed Hop passport token for X-Hop-Passport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id]
+              properties:
+                agent_id: { type: string }
+                capabilities:
+                  type: array
+                  items: { type: string }
+                mandate: { type: object }
+                ttl_ms: { type: integer }
+      responses:
+        "201":
+          description: "{ passport, token }"
+        "503":
+          description: identity_unconfigured
+  /v1/identity/passports/{id}:
+    get:
+      operationId: getPassport
+      summary: Public passport record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Passport
+        "404":
+          description: not_found
+  /v1/identity/passports/{id}/bind:
+    post:
+      operationId: bindPassport
+      summary: Bind mandate hash to passport policy_root
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: "{ passport, token }"
+  /v1/identity/passports/{id}/revoke:
+    post:
+      operationId: revokePassport
+      summary: Revoke a passport
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Revoked
   /v1/evidence/{id}/peac:
     get:
       operationId: getPeac
@@ -361,17 +490,22 @@ components:
           type: array
     VerifiableDecisionReceipt:
       type: object
-      required: [schema, decision, privacy, payment, charge, graph, cre, hashes, evidence_id]
+      required: [schema, decision, privacy, payment, charge, screening, graph, cre, hashes, evidence_id, verify_path]
       properties:
         schema:
           type: string
           const: hop.decision.v1
         decision:
           type: object
-          required: [status, query, demo_vertical]
+          required: [status, verdict, reason_code, query, demo_vertical]
           properties:
             status:
               $ref: "#/components/schemas/QueryStatus"
+            verdict:
+              type: string
+              enum: [ALLOW, HOLD, DENY, REVIEW]
+            reason_code:
+              type: string
             query:
               $ref: "#/components/schemas/QueryType"
             demo_vertical:
@@ -400,6 +534,9 @@ components:
             scheme:
               type: string
               const: exact
+            rail:
+              type: string
+              const: hedera_x402_exact
             ref:
               type: string
             payer_account:
@@ -415,6 +552,30 @@ components:
               enum: [attempt, idempotent_replay]
             settled:
               type: boolean
+        screening:
+          type: object
+          required: [ofac, kyc, world]
+          properties:
+            ofac: { type: string, const: not_screened }
+            kyc: { type: string, const: not_performed }
+            world: { type: string, enum: [off, unique_human] }
+        identity:
+          type: object
+          properties:
+            passport_id: { type: string }
+            agent_id: { type: string }
+            policy_root: { type: string }
+            did: { type: string }
+            erc8004:
+              type: object
+              properties:
+                agent_id: { type: integer }
+                agent_registry: { type: string }
+        hcs:
+          type: object
+          properties:
+            topic: { type: string }
+            sequence: { type: integer }
         graph:
           type: object
         cre:
@@ -429,6 +590,8 @@ components:
             chain: { type: string }
             cre_commitment: { type: string }
         evidence_id:
+          type: string
+        verify_path:
           type: string
         verification:
           type: object

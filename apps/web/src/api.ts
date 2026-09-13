@@ -24,6 +24,7 @@ export type MandateView = {
   human_threshold_tinybars: number;
   expires_at: string;
   template: Record<string, unknown>;
+  assurance?: { level?: string; kind?: string; consumer_prompt?: string };
 };
 
 export type Meta = {
@@ -75,6 +76,30 @@ export type Meta = {
     action: string;
     environment: "staging" | "production";
   };
+  identity?: {
+    ready: boolean;
+    required: boolean;
+    header: string;
+    issue: string;
+    did_header?: string;
+    erc8004_header?: string;
+  };
+  hitl?: {
+    default: string;
+    mandate_review: boolean;
+    world: boolean;
+    confirm_header: string;
+    world_header: string;
+  };
+  standards?: Record<string, unknown>;
+  rails?: {
+    pay: string;
+    decide: string;
+    verify: string;
+    verify_page?: string;
+    identity: string;
+    did?: string;
+  };
 };
 
 export type EvidencePack = {
@@ -111,6 +136,16 @@ export type EvidencePack = {
   };
   world?: { nullifier_hash: string };
   status: "accept" | "reject" | "k_anon_denied" | "stale";
+  verdict?: "ALLOW" | "HOLD" | "DENY" | "REVIEW";
+  reason_code?: string;
+  screening?: { ofac: string; kyc: string; world: string };
+  identity?: {
+    passport_id?: string;
+    agent_id?: string;
+    policy_root?: string;
+    did?: string;
+    erc8004?: { agent_id: number; agent_registry: string };
+  };
   hcs_seq?: number;
   hcs_topic?: string;
   mandate?: {
@@ -146,6 +181,8 @@ export type DecisionReceipt = {
   schema: "hop.decision.v1";
   decision: {
     status: EvidencePack["status"];
+    verdict: "ALLOW" | "HOLD" | "DENY" | "REVIEW";
+    reason_code: string;
     query: QueryType;
     demo_vertical: "finance.lending_policy_gate";
   };
@@ -157,6 +194,7 @@ export type DecisionReceipt = {
   payment: {
     network: "hedera:testnet";
     scheme: "exact";
+    rail?: "hedera_x402_exact";
     ref: string;
     payer_account?: string;
     amount: string;
@@ -165,6 +203,15 @@ export type DecisionReceipt = {
     semantics: "attempt" | "idempotent_replay";
     settled: boolean;
   };
+  screening?: { ofac: string; kyc: string; world: string };
+  identity?: {
+    passport_id?: string;
+    agent_id?: string;
+    policy_root?: string;
+    did?: string;
+    erc8004?: { agent_id: number; agent_registry: string };
+  };
+  hcs?: { topic?: string; sequence?: number };
   graph: EvidencePack["graph"];
   cre: EvidencePack["cre"];
   hashes: {
@@ -175,6 +222,7 @@ export type DecisionReceipt = {
     cre_commitment?: string;
   };
   evidence_id: string;
+  verify_path?: string;
 };
 
 async function api(path: string, init?: RequestInit): Promise<Response> {
@@ -205,7 +253,17 @@ export function openTrace(traceId: string, onEvent: (ev: { t: string; rail: stri
 
 export async function postQuery(
   body: QueryBody,
-  opts: { payment?: string; idem?: string; traceId: string; mandate?: string; confirm?: boolean; world?: string },
+  opts: {
+    payment?: string;
+    idem?: string;
+    traceId: string;
+    mandate?: string;
+    confirm?: boolean;
+    world?: string;
+    passport?: string;
+    did?: string;
+    erc8004?: string;
+  },
 ): Promise<{ status: number; json: Record<string, unknown> }> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -216,6 +274,9 @@ export async function postQuery(
   if (opts.mandate) headers["X-Hop-Mandate"] = opts.mandate;
   if (opts.confirm) headers["X-Hop-Confirm"] = "1";
   if (opts.world) headers["X-Hop-World"] = opts.world;
+  if (opts.passport) headers["X-Hop-Passport"] = opts.passport;
+  if (opts.did) headers["X-Hop-Did"] = opts.did;
+  if (opts.erc8004) headers["X-Hop-Erc8004"] = opts.erc8004;
   const res = await api("/v1/query", {
     method: "POST",
     headers,
@@ -438,4 +499,83 @@ export async function worldVerify(idkitResponse: unknown): Promise<{ token: stri
   const json = (await res.json()) as { token?: string; error?: string };
   if (!res.ok || !json.token) throw new Error(json.error ?? "world_verify");
   return { token: json.token };
+}
+
+export type PassportRecord = {
+  id: string;
+  agent_id: string;
+  capabilities: string[];
+  issued_at: string;
+  expires_at: string;
+  policy_root: string;
+  status: "active" | "revoked";
+  revoked_at?: string;
+  did?: string;
+  erc8004?: { agent_id: number; agent_registry: string };
+};
+
+export async function listPassports(): Promise<{
+  items: PassportRecord[];
+  required: boolean;
+}> {
+  const res = await api("/v1/identity/passports");
+  const json = (await res.json().catch(() => ({}))) as {
+    items?: PassportRecord[];
+    required?: boolean;
+    error?: string;
+  };
+  if (!res.ok) throw new Error(json.error ?? `passports_${res.status}`);
+  return { items: Array.isArray(json.items) ? json.items : [], required: Boolean(json.required) };
+}
+
+export async function issuePassport(input: {
+  agent_id: string;
+  capabilities?: string[];
+  mandate?: unknown;
+  did?: string;
+  erc8004?: unknown;
+}): Promise<{ passport: PassportRecord; token: string }> {
+  const res = await api("/v1/identity/passports", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const json = (await res.json().catch(() => ({}))) as {
+    passport?: PassportRecord;
+    token?: string;
+    error?: string;
+  };
+  if (!res.ok || !json.passport || !json.token) {
+    throw new Error(json.error ?? `passport_issue_${res.status}`);
+  }
+  return { passport: json.passport, token: json.token };
+}
+
+export async function bindPassport(
+  id: string,
+  mandate?: unknown,
+): Promise<{ passport: PassportRecord; token: string }> {
+  const res = await api(`/v1/identity/passports/${encodeURIComponent(id)}/bind`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mandate }),
+  });
+  const json = (await res.json().catch(() => ({}))) as {
+    passport?: PassportRecord;
+    token?: string;
+    error?: string;
+  };
+  if (!res.ok || !json.passport || !json.token) {
+    throw new Error(json.error ?? `passport_bind_${res.status}`);
+  }
+  return { passport: json.passport, token: json.token };
+}
+
+export async function revokePassport(id: string): Promise<PassportRecord> {
+  const res = await api(`/v1/identity/passports/${encodeURIComponent(id)}/revoke`, {
+    method: "POST",
+  });
+  const json = (await res.json().catch(() => ({}))) as PassportRecord & { error?: string };
+  if (!res.ok) throw new Error(json.error ?? `passport_revoke_${res.status}`);
+  return json;
 }

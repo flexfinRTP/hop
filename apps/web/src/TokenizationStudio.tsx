@@ -10,6 +10,7 @@ import {
   type EvidencePack,
 } from "./api";
 import { navigate } from "./nav";
+import { HopWordmark } from "./HopWordmark";
 
 type FormState = {
   evidence_id: string;
@@ -210,7 +211,8 @@ export function TokenizationStudio() {
     <div className="asset-shell">
       <header className="asset-top">
         <button type="button" onClick={() => navigate("/app")} className="asset-brand">
-          HOP / ATS
+          <HopWordmark tone="cream" />
+          <span>ATS</span>
         </button>
         <div className="asset-runtime">
           <span className={config?.configured ? "ok" : "bad"}>

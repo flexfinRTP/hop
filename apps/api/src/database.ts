@@ -103,6 +103,20 @@ async function migrate(client: PoolClient): Promise<void> {
 
     CREATE INDEX IF NOT EXISTS hop_asset_intents_evidence_idx
       ON hop_asset_intents (evidence_id, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS hop_passports (
+      id uuid PRIMARY KEY,
+      agent_id text NOT NULL,
+      status text NOT NULL CHECK (status IN ('active', 'revoked')),
+      payload jsonb NOT NULL,
+      issued_at timestamptz NOT NULL,
+      expires_at timestamptz NOT NULL,
+      revoked_at timestamptz,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE INDEX IF NOT EXISTS hop_passports_agent_idx
+      ON hop_passports (agent_id, status, issued_at DESC);
   `);
 }
 
@@ -361,6 +375,47 @@ export async function loadAssetIntents(): Promise<unknown[]> {
     `SELECT payload
        FROM hop_asset_intents
       ORDER BY updated_at ASC`,
+  );
+  return result.rows.map((row) => row.payload);
+}
+
+export async function persistPassport(row: {
+  id: string;
+  agentId: string;
+  status: string;
+  payload: unknown;
+  issuedAt: string;
+  expiresAt: string;
+  revokedAt?: string;
+}): Promise<void> {
+  if (!pool) return;
+  await pool.query(
+    `INSERT INTO hop_passports
+       (id, agent_id, status, payload, issued_at, expires_at, revoked_at, updated_at)
+     VALUES ($1, $2, $3, $4::jsonb, $5::timestamptz, $6::timestamptz, $7::timestamptz, now())
+     ON CONFLICT (id) DO UPDATE SET
+       agent_id = EXCLUDED.agent_id,
+       status = EXCLUDED.status,
+       payload = EXCLUDED.payload,
+       expires_at = EXCLUDED.expires_at,
+       revoked_at = EXCLUDED.revoked_at,
+       updated_at = now()`,
+    [
+      row.id,
+      row.agentId,
+      row.status,
+      JSON.stringify(row.payload),
+      row.issuedAt,
+      row.expiresAt,
+      row.revokedAt ?? null,
+    ],
+  );
+}
+
+export async function loadPassports(): Promise<unknown[]> {
+  if (!pool) return [];
+  const result = await pool.query(
+    `SELECT payload FROM hop_passports ORDER BY issued_at ASC`,
   );
   return result.rows.map((row) => row.payload);
 }

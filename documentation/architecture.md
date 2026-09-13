@@ -1,12 +1,14 @@
 # Architecture
 
+Enterprise: one hop in front of the irreversible tool call. Agent: 402-retry before spend, bind, or actuate. Why: [`language.md`](language.md).
+
 ## Components
 
 | Path | Responsibility |
 | --- | --- |
-| `apps/api` | Hono HTTP API: 402 quotes, Blocky402 verify/settle, CRE launch, evidence store |
-| `apps/web` | `/` product, `/app` decision room |
+| `apps/web` | `/` product, `/app` decision room, `/verify/{id}`, `/pitch.html` |
 | `apps/mcp` | MCP server over the same HTTP contract |
+| `apps/api` | Hono HTTP API: 402 quotes, Blocky402 verify/settle, CRE launch, evidence store, passports |
 | `cre/hop-query` | CRE TypeScript workflow, `handlerInTee` |
 | `packages/shared` | GraphQL, snapshot fetch, join, sanitizer, meter, mandate, PEAC |
 | `skills/hop-query` | Agent skill for the 402 retry |
@@ -60,6 +62,8 @@ GET /v1/meta
 
 The caller must send those `key` values. Unconfigured keys return `503 graph_unconfigured` before settlement.
 
+`GET /v1/meta` also returns `rails`, `identity`, `hitl` (`default: autonomous`; L2 confirm; World uniqueness), and `standards` (x402, A2A, DID, ERC-8004, RFC 9728). Public `POST /v1/query` is x402, not OAuth.
+
 ## Charge table
 
 | Condition | HTTP | Settled |
@@ -76,13 +80,16 @@ The caller must send those `key` values. Unconfigured keys return `503 graph_unc
 | Facilitator `/supported` down | 503 `facilitator_unavailable` | No |
 | Merchant `payTo` unset | 503 `merchant_unconfigured` | No |
 | Payer not allowlisted | 403 `payer_denied` | No |
-| Mandate deny / expired / over budget | 403 | No |
-| Mandate human threshold | 403 `mandate_review` | No until `X-Hop-Confirm: 1` |
+| Mandate deny / expired / over budget | 403 `DENY` | No |
+| Mandate human threshold | 403 `REVIEW` `mandate_review` | No until `X-Hop-Confirm: 1` |
+| Passport required / invalid / revoked | 403 `DENY` | No |
+| DID / ERC-8004 syntax or mismatch | 403 `DENY` | No |
+| Identity secret missing when passport presented or required | 503 `identity_unconfigured` | No |
 | Rate limit | 429 | No |
-| Block lag, indexing error, missing methodology/block timestamp, unevaluable metric | 200 `stale` | Yes |
-| k-anonymity fail | 200 `k_anon_denied` | Yes |
-| Policy breached | 200 `reject` | Yes |
-| Policy clear | 200 `accept` | Yes |
+| Block lag, indexing error, missing methodology/block timestamp, unevaluable metric | 200 `stale` `HOLD` | Yes |
+| k-anonymity fail | 200 `k_anon_denied` `DENY` | Yes |
+| Policy breached | 200 `reject` `HOLD` | Yes |
+| Policy clear | 200 `accept` `ALLOW` | Yes |
 
 There are no refunds. `stale` and `k_anon_denied` are charged outcomes (charge-for-attempt). The `/` CTA “One paid request. One decision receipt.” is the product sentence, not a refund SLA. Agents persist `receipt.evidence_id` on every 200, including stale.
 
@@ -107,6 +114,12 @@ packages/shared/src/egress.ts      Public-output sanitizer
 packages/shared/src/meter.ts       Protocol-count price
 apps/api/src/x402.ts               Blocky402 /supported /verify /settle
 apps/api/src/hcs.ts                Topic create + hash submit
+apps/api/src/hop-did.ts            did:web document
+apps/api/src/passport-store.ts     Hop passports
+apps/api/src/routes/identity.ts    issue / bind / revoke
+packages/shared/src/did.ts         DID syntax, RFC 9728 body
+packages/shared/src/passport.ts    MAC tokens
+packages/shared/src/decision.ts    verdict vocab
 cre/hop-query/main.ts              handlerInTee
 cre/secrets.yaml                   POLICY_TABLE, GRAPH_API_KEY
 ```

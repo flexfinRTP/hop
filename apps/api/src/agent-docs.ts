@@ -45,8 +45,11 @@ export const AGENT_DOC_INDEX = {
   openapi: "/openapi.yaml",
   skill: "/SKILL.md",
   documentation: "/documentation/README.md",
+  judge: "/documentation/judge.md",
   swagger: "/swagger.html",
   agent_card: "/.well-known/agent-card.json",
+  did: "/.well-known/did.json",
+  oauth_protected_resource: "/.well-known/oauth-protected-resource",
 } as const;
 
 export function mountAgentDocs(app: Hono) {

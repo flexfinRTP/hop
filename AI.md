@@ -6,4 +6,4 @@ Hop contains no model runtime. Natural-language mapping is the caller agent’s 
 
 No Continuity submission. No copied product source from other repositories.
 
-Technical reference: [`documentation/README.md`](documentation/README.md).
+Technical reference: [`documentation/README.md`](documentation/README.md). Commercial language: [`documentation/language.md`](documentation/language.md) (why enterprise, why agent workflow). Judges: [`documentation/judge.md`](documentation/judge.md).

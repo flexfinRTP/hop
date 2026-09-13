@@ -78,6 +78,10 @@ export type AppConfig = {
   liquidationRpcUrl: string;
   liquidationParticipant: string;
   liquidationWorkflowId: string;
+  passportSecret: string;
+  passportRequired: boolean;
+  passportTtlMs: number;
+  hopDid: string;
 };
 
 function req(name: string): string {
@@ -191,6 +195,10 @@ export function loadConfig(): AppConfig {
       "https://ethereum-sepolia-rpc.publicnode.com",
     liquidationParticipant: req("LIQUIDATION_PARTICIPANT_ADDRESS"),
     liquidationWorkflowId: req("LIQUIDATION_WORKFLOW_ID"),
+    passportSecret: req("HOP_PASSPORT_SECRET"),
+    passportRequired: req("HOP_PASSPORT_REQUIRED") === "1",
+    passportTtlMs: Number(process.env.HOP_PASSPORT_TTL_MS ?? 30 * 24 * 3600 * 1000),
+    hopDid: req("HOP_DID"),
   };
 }
 

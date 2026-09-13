@@ -1,6 +1,8 @@
 export const ARTICLES: { slug: string; file: string; k: string; group: string }[] = [
   { slug: "overview", file: "README.md", k: "Overview", group: "Start" },
+  { slug: "language", file: "language.md", k: "Why / language", group: "Start" },
   { slug: "agents", file: "agents.md", k: "Agents", group: "Start" },
+  { slug: "identity", file: "identity.md", k: "Identity", group: "Start" },
   { slug: "hedera-x402", file: "hedera-x402.md", k: "Hedera x402", group: "Rails" },
   { slug: "architecture", file: "architecture.md", k: "Architecture", group: "Rails" },
   { slug: "the-graph", file: "the-graph.md", k: "The Graph", group: "Rails" },
@@ -9,6 +11,7 @@ export const ARTICLES: { slug: string; file: string; k: string; group: string }[
   { slug: "hedera-ats", file: "hedera-ats.md", k: "Hedera ATS", group: "Extra" },
   { slug: "liquidation", file: "chainlink-liquidation.md", k: "Liquidation", group: "Extra" },
   { slug: "operator", file: "operator.md", k: "Operator", group: "Extra" },
+  { slug: "demo", file: "demo-script.md", k: "Demo tape", group: "Extra" },
 ];
 
 const ARTICLE_BY_FILE: Record<string, string> = Object.fromEntries(
@@ -25,6 +28,7 @@ function rewriteHref(href: string): string {
   if (file === "openapi.yaml") return "/docs/api";
   if (file === "SKILL.md") return "/docs/skill";
   if (file === "llms.txt") return "/docs/llms";
+  if (file === "judge.md") return "/docs";
   if (file === "README.md" && clean.includes("documentation")) return "/docs/overview";
   const slug = ARTICLE_BY_FILE[file];
   if (slug) return `/docs/${slug}`;

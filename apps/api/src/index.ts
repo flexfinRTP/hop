@@ -24,7 +24,10 @@ import { discovery } from "./routes/discovery.js";
 import { initAssetStore } from "./asset-store.js";
 import { assets } from "./routes/assets.js";
 import { liquidation } from "./routes/liquidation.js";
+import { identity } from "./routes/identity.js";
+import { initPassportStore } from "./passport-store.js";
 import { mountAgentDocs } from "./agent-docs.js";
+import { hopDidJson, hopOauthResource } from "./hop-did.js";
 
 dns.setDefaultResultOrder("ipv4first");
 
@@ -33,6 +36,7 @@ loadEnv({ path: path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../.
 
 const cfg = loadConfig();
 await initStore(cfg.evidenceDir, cfg.evidenceTtlMs, cfg.databaseUrl, cfg.databaseSsl);
+await initPassportStore(cfg.evidenceDir);
 await initAssetStore(cfg.evidenceDir);
 const stopHcsOutbox = startHcsOutboxWorker(cfg);
 
@@ -53,6 +57,9 @@ app.use(
       "X-Hop-Mandate",
       "X-Hop-Confirm",
       "X-Hop-World",
+      "X-Hop-Passport",
+      "X-Hop-Did",
+      "X-Hop-Erc8004",
     ],
   }),
 );
@@ -75,6 +82,14 @@ app.get("/.well-known/agent-registration.json", (c) => {
   const origin = new URL(c.req.url).origin;
   return c.json(agentRegistration(loadConfig(), origin));
 });
+app.get("/.well-known/did.json", (c) => {
+  const origin = new URL(c.req.url).origin;
+  return c.json(hopDidJson(loadConfig(), origin));
+});
+app.get("/.well-known/oauth-protected-resource", (c) => {
+  const origin = new URL(c.req.url).origin;
+  return c.json(hopOauthResource(origin));
+});
 
 app.route("/v1/query", query);
 app.route("/v1/evidence", evidence);
@@ -86,6 +101,7 @@ app.route("/v1/world", world);
 app.route("/v1/discovery", discovery);
 app.route("/v1/assets", assets);
 app.route("/v1/liquidation", liquidation);
+app.route("/v1/identity", identity);
 
 app.get("/health", (c) => {
   const live = loadConfig();
@@ -102,6 +118,7 @@ app.get("/health", (c) => {
       ofac: "not_screened",
       mor: "testnet_payee",
       cre: "simulation",
+      identity: live.passportSecret ? (live.passportRequired ? "required" : "optional") : "unconfigured",
     },
   });
 });

@@ -31,6 +31,9 @@ export type AutonomousQuery = {
   mandate?: string;
   confirm?: boolean;
   worldToken?: string;
+  passportToken?: string;
+  agentDid?: string;
+  erc8004?: string;
   idempotencyKey?: string;
 };
 
@@ -120,6 +123,9 @@ function headersFor(input: AutonomousQuery): Record<string, string> {
   if (input.mandate) headers["X-Hop-Mandate"] = input.mandate;
   if (input.confirm) headers["X-Hop-Confirm"] = "1";
   if (input.worldToken) headers["X-Hop-World"] = input.worldToken;
+  if (input.passportToken) headers["X-Hop-Passport"] = input.passportToken;
+  if (input.agentDid) headers["X-Hop-Did"] = input.agentDid;
+  if (input.erc8004) headers["X-Hop-Erc8004"] = input.erc8004;
   return headers;
 }
 

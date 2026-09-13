@@ -2,6 +2,8 @@
 
 Hop’s second CRE workflow is the live ETHOnline 2026 liquidation-protection challenge. It is not the generic mock `/risk-state` template.
 
+Extra track. Not the Hop SKU. Why you buy Hop: [`language.md`](language.md).
+
 Official addresses ([ETHGlobal Chainlink prize](https://ethglobal.com/events/ethonline2026/prizes/chainlink), [challenge repo](https://github.com/solangegueiros/cf-liquidation-protection-challenge)):
 
 | Contract | Address |

@@ -4,23 +4,27 @@ Hop is a paid HTTP service that returns a composed decision object. The public d
 
 Decision is private. Payment is public on Hedera. Data source is public on The Graph. The receipt says what was and was not verified.
 
-This directory is the technical reference. The HTTP contract is [`../openapi/openapi.yaml`](../openapi/openapi.yaml). Agent integration is [`../skills/hop-query/SKILL.md`](../skills/hop-query/SKILL.md). Human docs hub: `/docs`. Hosted Swagger: `/swagger.html`.
+This directory is the technical reference. Commercial language is locked in [`language.md`](language.md). The HTTP contract is [`../openapi/openapi.yaml`](../openapi/openapi.yaml). Agent integration is [`../skills/hop-query/SKILL.md`](../skills/hop-query/SKILL.md). Human docs hub: `/docs`. Judge pack: [`judge.md`](judge.md) (`/docs/judge`). Hosted Swagger: `/swagger.html`.
 
 ## Point your agent here
 
-Give an agent this index, `/llms.txt`, `/openapi.yaml`, or `/SKILL.md`. It integrates the Hedera-paid decision API in seconds. No SDK. No API key. No handwritten client.
+Give an agent this index, `/llms.txt`, `/openapi.yaml`, or `/SKILL.md`. It integrates the Hedera-paid decision API in seconds. No SDK. No API key. No login. No handwritten client. Optional DID stamps the receipt.
 
 | Audience | Start here |
 | --- | --- |
+| Language / commercial | [Protocol language — source of truth](language.md) |
+| Judge | [Scoreable tape + standards](judge.md) |
 | Product / operations | [Architecture](architecture.md) |
 | Next implementation | [Product implementation plan](product-implementation-plan.md) |
 | Operator | [Activation](operator.md) |
+| Demo tape | [3-minute script](demo-script.md) |
 | Payments | [Hedera x402](hedera-x402.md) |
 | Data | [The Graph — standardized lending](the-graph.md) |
 | Confidential compute | [Chainlink CRE](chainlink-cre.md) |
 | Tokenization | [Hedera ATS](hedera-ats.md) |
 | Sepolia defense | [Liquidation challenge](chainlink-liquidation.md) |
-| Agents | [MCP, skills, mandates, discovery](agents.md) |
+| Agents | [MCP, skills, mandates, passports, discovery](agents.md) |
+| Identity | [Passports, DID, ERC-8004, HITL](identity.md) |
 | Audit | [Evidence, HCS, verification](evidence.md) |
 
 ## What Hop is
@@ -31,6 +35,15 @@ Hop sells a **composed decision object**, not raw GraphQL. Finance is the demo v
 - Protocol sources are explicit keys from `GET /v1/meta`. The service does not pick a hidden subgraph.
 - The policy table is a CRE secret. Thresholds never appear in HTTP responses or evidence packs.
 - Settlement uses the x402 `exact` scheme on Hedera through the Blocky402 facilitator. Hop does not proxy The Graph’s Base USDC x402 endpoint.
+- Public `POST /v1/query` is x402, not OAuth (`GET /.well-known/oauth-protected-resource`).
+- Optional `X-Hop-Did` / `X-Hop-Erc8004` / passport stamp the receipt. They are not required to pay.
+
+## Why
+
+- **Enterprise:** an agent that can move value without a receipt is an uninsured process. You will not scale that. Gate before value moves. Caps sealed. Mandate is a number. `/verify/{id}` is the audit link. Fail closed on 503. You keep policy, keys, agent, customer.
+- **Agent workflow:** the tool call before the tool call that cannot be undone. Map the ask → 402 → pay → ALLOW|HOLD|DENY|REVIEW → then the real tool. No API key. No login. Idempotency. Receipt id on the trace. Do not put Hop on every token.
+
+Canonical copy: [`language.md`](language.md).
 
 ## Runtime path
 
@@ -98,6 +111,9 @@ The Graph documentation distinguishes three identifiers. Hop records the **Subgr
 - [Hedera and the x402 payment standard](https://hedera.com/blog/hedera-and-the-x402-payment-standard/)
 - [Blocky402](https://blocky402.com/)
 - [x402 protocol](https://github.com/x402-foundation/x402)
+- [W3C DID Core](https://www.w3.org/TR/did-core/)
+- [ERC-8004](https://eips.ethereum.org/EIPS/eip-8004)
+- [MCP authorization (OAuth is not on `/v1/query`)](https://modelcontextprotocol.io/specification/draft/basic/authorization)
 - [Standardized Subgraphs](https://thegraph.com/docs/en/subgraphs/existing-subgraphs/standard-subgraphs/)
 - [Messari lending schema](https://github.com/messari/subgraphs/blob/master/schema-lending.graphql)
 - [Subgraph Studio API keys](https://thegraph.com/docs/en/subgraphs/providers/subgraph-studio/managing-api-keys/)

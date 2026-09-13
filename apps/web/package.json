@@ -12,9 +12,10 @@
     "@hashgraph/asset-tokenization-sdk": "8.0.0",
     "@hop/shared": "*",
     "@worldcoin/idkit": "^4.2.3",
-    "reflect-metadata": "^0.2.2",
+    "motion": "^12.43.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "reflect-metadata": "^0.2.2",
     "viem": "^2.56.3"
   },
   "devDependencies": {

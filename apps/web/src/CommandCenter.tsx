@@ -9,18 +9,26 @@ import {
   getMeta,
   getPeac,
   getVerify,
+  bindPassport,
+  issuePassport,
+  listPassports,
   openTrace,
   postQuery,
+  revokePassport,
   signDemo,
   type DecisionReceipt,
   type EvidencePack,
   type LiquidationState,
   type Meta,
+  type PassportRecord,
   type QueryBody,
   type VerifyPack,
 } from "./api";
+import { HopWordmark } from "./HopWordmark";
+import { RunTheater } from "./RunTheater";
 import { WorldIdButton } from "./WorldId";
 import { navigate } from "./nav";
+import { redactTrace } from "@hop/shared";
 
 type View = "decision" | "evidence" | "infrastructure";
 type RunStatus =
@@ -34,6 +42,7 @@ type RunStatus =
   | "k_anon_denied"
   | "world_required"
   | "mandate_denied"
+  | "passport_denied"
   | "rate_limited"
   | "service_unavailable"
   | "error";
@@ -54,6 +63,9 @@ type QuotedRun = {
   idem: string;
   mandate?: string;
   world?: string;
+  passport?: string;
+  did?: string;
+  erc8004?: string;
 };
 
 const QUERY_LABELS: Record<QueryType, string> = {
@@ -75,6 +87,7 @@ const STATUS_COPY: Record<RunStatus, string> = {
   k_anon_denied: "PRIVACY DENIED",
   world_required: "HUMAN PROOF REQUIRED",
   mandate_denied: "MANDATE DENIED",
+  passport_denied: "PASSPORT DENIED",
   rate_limited: "RATE LIMITED",
   service_unavailable: "RAIL UNAVAILABLE",
   error: "RUN FAILED",
@@ -194,6 +207,10 @@ function mapStatus(http: number, json: Record<string, unknown>): RunStatus {
   if (http === 429) return "rate_limited";
   if (http === 403 && json.error === "mandate_review") return "review";
   if (http === 403 && json.error === "world_required") return "world_required";
+  if (http === 403 && String(json.error ?? "").startsWith("passport_")) return "passport_denied";
+  if (http === 403 && (String(json.error ?? "").startsWith("did_") || String(json.error ?? "").startsWith("erc8004_"))) {
+    return "passport_denied";
+  }
   if (http === 403) return "mandate_denied";
   if (http === 503) return "service_unavailable";
   if (json.status === "stale") return "stale";
@@ -307,6 +324,14 @@ export function CommandCenter() {
   const [label, setLabel] = useState("Aave + Compound utilization gate");
   const [xPayment, setXPayment] = useState("");
   const [worldToken, setWorldToken] = useState("");
+  const [passportToken, setPassportToken] = useState("");
+  const [agentDid, setAgentDid] = useState("");
+  const [erc8004Ref, setErc8004Ref] = useState("");
+  const [passports, setPassports] = useState<PassportRecord[]>([]);
+  const [passportAgent, setPassportAgent] = useState("desk-agent");
+  const [passportBusy, setPassportBusy] = useState(false);
+  const [verifyCopied, setVerifyCopied] = useState(false);
+  const [gatePrompt, setGatePrompt] = useState("");
   const [status, setStatus] = useState<RunStatus>("ready");
   const [pending, setPending] = useState(false);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
@@ -324,6 +349,7 @@ export function CommandCenter() {
   const [voiceInputReady, setVoiceInputReady] = useState(false);
   const [voiceOutput, setVoiceOutput] = useState(false);
   const [wallOpen, setWallOpen] = useState(false);
+  const [theaterOpen, setTheaterOpen] = useState(false);
   const [atsIntents, setAtsIntents] = useState<AssetIntent[]>([]);
   const [liquidation, setLiquidation] = useState<LiquidationState | null>(null);
   const closeTrace = useRef<(() => void) | null>(null);
@@ -377,6 +403,9 @@ export function CommandCenter() {
     if (view !== "infrastructure" && !wallOpen) return;
     void getAssetIntents(50).then(setAtsIntents).catch(() => setAtsIntents([]));
     void getLiquidationState().then(setLiquidation).catch(() => setLiquidation(null));
+    void listPassports()
+      .then((row) => setPassports(row.items))
+      .catch(() => setPassports([]));
   }, [view, wallOpen]);
 
   useEffect(() => {
@@ -411,7 +440,11 @@ export function CommandCenter() {
   );
 
   function pushTrace(event: Trace) {
-    setTrace((current) => [...current, event]);
+    setTrace((current) => [...current, { ...event, msg: redactTrace(event.msg) }]);
+  }
+
+  function applyTrace(events: Trace[]) {
+    setTrace(events.map((event) => ({ ...event, msg: redactTrace(event.msg) })));
   }
 
   function toggleProtocol(key: string) {
@@ -442,9 +475,15 @@ export function CommandCenter() {
         ? (result.json.aggregate as Record<string, unknown>)
         : null;
     setAggregate(nextAggregate);
+    setGatePrompt(typeof result.json.consumer_prompt === "string" ? result.json.consumer_prompt : "");
 
     const embedded = evidenceFrom(result.json.evidence);
-    if (!embedded) return null;
+    if (!embedded) {
+      if (nextStatus === "review" || nextStatus === "mandate_denied" || nextStatus === "passport_denied") {
+        await refreshMeta();
+      }
+      return null;
+    }
     const fromQuery = decisionFrom(result.json.receipt);
     if (fromQuery) setDecision(fromQuery);
     let pack = embedded;
@@ -459,6 +498,7 @@ export function CommandCenter() {
     quotedRun.current = null;
     speakResult(nextStatus);
     await refreshHistory(pack.id);
+    await refreshMeta();
     return pack;
   }
 
@@ -478,9 +518,12 @@ export function CommandCenter() {
       traceId: run.traceId,
       mandate: run.mandate,
       world: run.world,
+      passport: run.passport,
+      did: run.did,
+      erc8004: run.erc8004,
       confirm: confirmed,
     });
-    if (Array.isArray(paid.json.trace)) setTrace(paid.json.trace as Trace[]);
+    if (Array.isArray(paid.json.trace)) applyTrace(paid.json.trace as Trace[]);
     await completeResult(paid);
   }
 
@@ -489,6 +532,7 @@ export function CommandCenter() {
     quotedRun.current = null;
     setPending(true);
     setStatus("running");
+    setTheaterOpen(true);
     setReceipt(null);
     setDecision(null);
     setSelectedEvidence(null);
@@ -515,9 +559,12 @@ export function CommandCenter() {
         traceId,
         mandate,
         world: worldToken || undefined,
+        passport: passportToken || undefined,
+        did: agentDid.trim() || undefined,
+        erc8004: erc8004Ref.trim() || undefined,
       });
 
-      if (Array.isArray(quote.json.trace)) setTrace(quote.json.trace as Trace[]);
+      if (Array.isArray(quote.json.trace)) applyTrace(quote.json.trace as Trace[]);
       if (quote.status !== 402) {
         await completeResult(quote);
         return;
@@ -538,6 +585,9 @@ export function CommandCenter() {
         idem,
         mandate,
         world: worldToken || undefined,
+        passport: passportToken || undefined,
+        did: agentDid.trim() || undefined,
+        erc8004: erc8004Ref.trim() || undefined,
       };
 
       if (needApproval) {
@@ -568,6 +618,7 @@ export function CommandCenter() {
     if (!run || pending) return;
     setPending(true);
     setStatus("running");
+    setTheaterOpen(true);
     setTrace([]);
     const start = Date.now();
     setStartedAt(start);
@@ -627,15 +678,17 @@ export function CommandCenter() {
   const hederaReady = Boolean(meta?.payTo && meta?.network === "hedera:testnet");
   const configuredCount = meta?.protocols.filter((item) => item.configured).length ?? 0;
   const verdict =
-    status === "success" && aggregate?.breached === true
+    decision?.decision.verdict ??
+    receipt?.verdict ??
+    (status === "success" && aggregate?.breached === true
       ? "HOLD"
       : status === "success"
         ? query === "policy_check"
-          ? "CLEAR"
-          : "ACCEPTED"
+          ? "ALLOW"
+          : "ALLOW"
         : status === "reject"
           ? "HOLD"
-          : STATUS_COPY[status];
+          : STATUS_COPY[status]);
 
   const steps = [
     {
@@ -696,11 +749,8 @@ export function CommandCenter() {
             navigate("/");
           }}
         >
-          <span className="ops-brand-mark" aria-hidden="true">
-            H
-          </span>
           <span>
-            <strong>HOP</strong>
+            <HopWordmark />
             <small>DECISION API</small>
           </span>
         </a>
@@ -908,6 +958,36 @@ export function CommandCenter() {
                         />
                       </div>
                     ) : null}
+                    <label className="wide">
+                      <span>X-Hop-Passport</span>
+                      <input
+                        value={passportToken}
+                        disabled={controlsLocked}
+                        onChange={(event) => setPassportToken(event.target.value)}
+                        autoComplete="off"
+                        placeholder={meta?.identity?.ready ? "Optional unless required" : "Identity unconfigured"}
+                      />
+                    </label>
+                    <label className="wide">
+                      <span>X-Hop-Did</span>
+                      <input
+                        value={agentDid}
+                        disabled={controlsLocked}
+                        onChange={(event) => setAgentDid(event.target.value)}
+                        autoComplete="off"
+                        placeholder="did:web:… optional"
+                      />
+                    </label>
+                    <label className="wide">
+                      <span>X-Hop-Erc8004</span>
+                      <input
+                        value={erc8004Ref}
+                        disabled={controlsLocked}
+                        onChange={(event) => setErc8004Ref(event.target.value)}
+                        autoComplete="off"
+                        placeholder="agentId;eip155:chain:registry"
+                      />
+                    </label>
                   </div>
                 </details>
               </section>
@@ -940,6 +1020,13 @@ export function CommandCenter() {
                   <div>
                     <span>EXECUTION TRACE</span>
                     <b>{trace.length} EVENTS</b>
+                    <button
+                      type="button"
+                      onClick={() => setTheaterOpen(true)}
+                      disabled={!pending && trace.length === 0 && !receipt}
+                    >
+                      LIVE HOP
+                    </button>
                   </div>
                   <p>
                     {trace.length
@@ -989,17 +1076,28 @@ export function CommandCenter() {
                     <dd>
                       {decision
                         ? decision.charge.settled
-                          ? `ATTEMPT · ${decision.decision.status.toUpperCase()}`
+                          ? `${decision.decision.verdict} · ${decision.decision.reason_code}`
                           : "REPLAY"
                         : receipt
-                          ? "ATTEMPT"
+                          ? receipt.verdict ?? "ATTEMPT"
                           : "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>SCREENING</dt>
+                    <dd>
+                      {(decision?.screening ?? receipt?.screening)?.ofac ?? "not_screened"}
                     </dd>
                   </div>
                 </dl>
 
                 {status === "review" ? (
-                  <button
+                  <>
+                    {gatePrompt ? <p className="ops-gate-prompt">{gatePrompt}</p> : null}
+                    <p className="ops-gate-remaining">
+                      {formatHbar(meta?.mandate?.remaining_tinybars)} · {meta?.mandate?.remaining_hops ?? "—"} CALLS
+                    </p>
+                    <button
                     type="button"
                     className="ops-primary ops-approve"
                     onClick={() => void approveDecision()}
@@ -1007,6 +1105,7 @@ export function CommandCenter() {
                     <span>APPROVE {formatHbar(invoice?.amount ?? meta?.amount)}</span>
                     <b>→</b>
                   </button>
+                  </>
                 ) : (
                   <button
                     type="button"
@@ -1056,6 +1155,19 @@ export function CommandCenter() {
                       <a href={hashscanTx(receipt.settlement.ref)} target="_blank" rel="noreferrer">
                         HASHSCAN ↗
                       </a>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = `${window.location.origin}/verify/${receipt.id}`;
+                          void navigator.clipboard.writeText(url).then(() => {
+                            setVerifyCopied(true);
+                            window.setTimeout(() => setVerifyCopied(false), 1500);
+                          });
+                          navigate(`/verify/${receipt.id}`);
+                        }}
+                      >
+                        {verifyCopied ? "COPIED" : "VERIFY LINK"}
+                      </button>
                       <button type="button" onClick={() => setWallOpen(true)}>
                         ATS
                       </button>
@@ -1184,6 +1296,9 @@ export function CommandCenter() {
                       </button>
                       <a href={hashscanTx(selectedEvidence.settlement.ref)} target="_blank" rel="noreferrer">
                         HASHSCAN ↗
+                      </a>
+                      <a href={`/verify/${selectedEvidence.id}`}>
+                        PUBLIC VERIFY
                       </a>
                     </div>
                     <VerifyBanner busy={verifyBusy} result={verifyResult} />
@@ -1372,6 +1487,92 @@ export function CommandCenter() {
                 </dl>
               </article>
 
+              <article className={`ops-infra-card ${meta?.identity?.ready ? "ready" : "optional"}`}>
+                <div className="ops-infra-card-head">
+                  <span>05B · PASSPORT</span>
+                  <ProofBadge
+                    state={meta?.identity?.ready ? "done" : "waiting"}
+                    label={meta?.identity?.required ? "REQUIRED" : meta?.identity?.ready ? "READY" : "UNCONFIGURED"}
+                  />
+                </div>
+                <h2>Agent passport</h2>
+                <strong>{passportToken ? "TOKEN HELD" : `${passports.filter((row) => row.status === "active").length} ACTIVE`}</strong>
+                <dl>
+                  <div><dt>Header</dt><dd>X-Hop-Passport</dd></div>
+                  <div><dt>DID</dt><dd>{agentDid.trim() || passports[0]?.did || "NONE"}</dd></div>
+                  <div><dt>ERC-8004</dt><dd>{erc8004Ref.trim() || (passports[0]?.erc8004 ? `${passports[0].erc8004.agent_id}@${passports[0].erc8004.agent_registry}` : "NONE")}</dd></div>
+                  <div><dt>Agent</dt><dd>
+                    <input
+                      value={passportAgent}
+                      disabled={passportBusy}
+                      onChange={(event) => setPassportAgent(event.target.value)}
+                    />
+                  </dd></div>
+                </dl>
+                <div className="ops-evidence-actions">
+                  <button
+                    type="button"
+                    disabled={passportBusy || !meta?.identity?.ready}
+                    onClick={() => {
+                      setPassportBusy(true);
+                      void issuePassport({
+                        agent_id: passportAgent.trim() || "desk-agent",
+                        mandate: meta?.mandate?.template,
+                        did: agentDid.trim() || undefined,
+                        erc8004: erc8004Ref.trim() || undefined,
+                      })
+                        .then((row) => {
+                          setPassportToken(row.token);
+                          setPassports((current) => [row.passport, ...current.filter((item) => item.id !== row.passport.id)]);
+                        })
+                        .finally(() => setPassportBusy(false));
+                    }}
+                  >
+                    ISSUE
+                  </button>
+                  {passports[0] && passports[0].status === "active" ? (
+                    <button
+                      type="button"
+                      disabled={passportBusy || !meta?.mandate}
+                      onClick={() => {
+                        const id = passports[0]?.id;
+                        if (!id) return;
+                        setPassportBusy(true);
+                        void bindPassport(id, meta?.mandate?.template)
+                          .then((row) => {
+                            setPassportToken(row.token);
+                            setPassports((current) =>
+                              current.map((item) => (item.id === row.passport.id ? row.passport : item)),
+                            );
+                          })
+                          .finally(() => setPassportBusy(false));
+                      }}
+                    >
+                      BIND
+                    </button>
+                  ) : null}
+                  {passports[0] && passports[0].status === "active" ? (
+                    <button
+                      type="button"
+                      disabled={passportBusy}
+                      onClick={() => {
+                        const id = passports[0]?.id;
+                        if (!id) return;
+                        setPassportBusy(true);
+                        void revokePassport(id)
+                          .then((row) => {
+                            setPassports((current) => current.map((item) => (item.id === row.id ? { ...item, ...row } : item)));
+                            setPassportToken("");
+                          })
+                          .finally(() => setPassportBusy(false));
+                      }}
+                    >
+                      REVOKE
+                    </button>
+                  ) : null}
+                </div>
+              </article>
+
               <article className="ops-infra-card ready">
                 <div className="ops-infra-card-head">
                   <span>06 · AGENT DX</span>
@@ -1384,6 +1585,7 @@ export function CommandCenter() {
                   <div><dt>OpenAPI</dt><dd><a href="/openapi.yaml">/openapi.yaml</a></dd></div>
                   <div><dt>MCP</dt><dd>{meta?.mcp_tools?.length ?? 8} tools</dd></div>
                   <div><dt>Card</dt><dd>/.well-known/agent-card.json</dd></div>
+                  <div><dt>Deck</dt><dd><a href="/pitch.html">/pitch.html</a></dd></div>
                 </dl>
               </article>
 
@@ -1438,6 +1640,34 @@ export function CommandCenter() {
           </div>
         ) : null}
       </main>
+
+      <RunTheater
+        open={theaterOpen}
+        pending={pending}
+        statusLabel={STATUS_COPY[status]}
+        runtimeLabel={formatDuration(runtime)}
+        trace={trace}
+        receipt={receipt}
+        decision={decision}
+        verdict={verdict}
+        approveLabel={status === "review" ? `APPROVE ${formatHbar(invoice?.amount ?? meta?.amount)}` : undefined}
+        onClose={() => setTheaterOpen(false)}
+        onApprove={status === "review" ? () => void approveDecision() : undefined}
+        onExport={receipt ? () => downloadJson("hop-evidence.json", receipt) : undefined}
+        onReceipt={decision ? () => downloadJson("hop-decision.json", decision) : undefined}
+        onVerifyLink={
+          receipt
+            ? () => {
+                const url = `${window.location.origin}/verify/${receipt.id}`;
+                void navigator.clipboard.writeText(url).then(() => {
+                  setVerifyCopied(true);
+                  window.setTimeout(() => setVerifyCopied(false), 1500);
+                });
+                navigate(`/verify/${receipt.id}`);
+              }
+            : undefined
+        }
+      />
 
       {wallOpen ? (
         <div className="ops-modal" role="dialog" aria-modal="true" aria-label="ATS">

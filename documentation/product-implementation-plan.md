@@ -6,13 +6,17 @@ This is the executable spec for remaining core product / code. Do not start extr
 
 ## Locked positioning (do not drift)
 
+Canonical commercial language: [`language.md`](language.md). Do not invent claims, buyers, or rails outside that file.
+
 - Category: **verifiable decision infrastructure for agents.**
 - Primary: before an agent acts, get a decision with a receipt.
 - Supporting (live on `/`): private policy. Public settlement. Verifiable evidence.
-- Demo vertical: finance — pre-action lending policy gate (Aave v3 + Compound v3, `policy_check`).
-- Audience: agents and agent platforms. Not DeFi risk desks or treasury engineering teams.
+- Demo vertical: finance — pre-action lending policy gate (Aave v3 + Compound v3, `policy_check`). Other sectors in [`language.md`](language.md) are the same hop with a swapped warehouse — not extra products, not shipped.
+- Audience: the operator who owns the threshold (CRO / VP Ops / CISO / CUO / CPO) plus the agent that pays. Not model labs. Not KYC vendors. Not “DeFi risk desk” as the SKU.
 - Payments: **public** Hedera testnet x402 (visible settlement, payer, amount). Not private payments.
 - What is private: policy evaluation / decision logic. Policy values are omitted from public responses.
+- **Why enterprise:** an agent that can move value without a receipt is an uninsured process.
+- **Why agent workflow:** the tool call before the tool call that cannot be undone.
 
 Honest boundary to keep everywhere:
 

@@ -1,27 +1,35 @@
 # Hop
 
-Point an agent at this file (or /openapi.yaml, /SKILL.md, /documentation/README.md). It can pay Hedera exact x402 and call POST /v1/query in seconds. No SDK. No API key.
+Point an agent at this file (or /openapi.yaml, /SKILL.md, /documentation/README.md, /documentation/judge.md). It can pay Hedera exact x402 and call POST /v1/query in seconds. No SDK. No API key. No login.
 
 Verifiable decision infrastructure for agents. Paid HTTP 402. Fixed query types. Explicit protocol keys. Demo: lending policy gate.
 
+Why in the workflow: the tool call before the tool call that cannot be undone. Map ask → POST /v1/query → 402 → pay exact x402 → ALLOW|HOLD|DENY|REVIEW → then the real tool. Attach /verify/{id}. Not on every token — on spend, bind, or actuate. Enterprise: uninsured process without a receipt. Why lock: documentation/language.md.
+
 ## Spec
 
+- Protocol language (commercial source of truth): documentation/language.md
 - Architecture and integrations: documentation/README.md
 - OpenAPI: openapi/openapi.yaml
 - Agent skill: skills/hop-query/SKILL.md
 - Human docs: /docs
+- Judge pack: /docs/judge
 - Swagger: /swagger.html
 - Discovery: GET /.well-known/agent-card.json
+- DID: GET /.well-known/did.json
+- OAuth advert: GET /.well-known/oauth-protected-resource (query is x402, not OAuth)
 
 ## Routes
 
-- POST /v1/query — Hedera exact x402 (Blocky402). Idempotency-Key required on paid retry. Optional X-Hop-Mandate, X-Hop-Confirm, X-Hop-World. 200 includes receipt hop.decision.v1. stale/k_anon_denied are charged attempts.
+- POST /v1/query — Hedera exact x402 (Blocky402). Idempotency-Key required on paid retry. Optional X-Hop-Mandate, X-Hop-Confirm, X-Hop-World, X-Hop-Passport, X-Hop-Did, X-Hop-Erc8004. 200 includes receipt hop.decision.v1 (verdict ALLOW|HOLD|DENY, reason_code, screening, verify_path, optional identity.did / identity.erc8004). stale/k_anon_denied are charged attempts.
+- GET /v1/evidence/{id}/verify — hashes, Mirror Node settlement, tiers, hop.decision.v1 receipt
+- GET /verify/{id} — public verify page (copyable)
+- GET /v1/identity/passports — issue/list/bind/revoke Hop passports
+- GET /v1/mandate — remaining budget (does not pay)
+- GET /v1/meta — rails, protocols, meter, mandate remaining, HCS, CRE, World ID, identity, hitl, standards
 - 503 cre_unavailable | graph_unconfigured | policy_unavailable — before payment.
 - GET /v1/evidence/{id} — public hashes. No Account.id. No policy caps.
 - GET /v1/evidence/{id}/peac — PEAC-shaped receipt
-- GET /v1/evidence/{id}/verify — hashes, Mirror Node settlement, tiers, hop.decision.v1 receipt
-- GET /v1/mandate — remaining budget (does not pay)
-- GET /v1/meta — rails, protocols, meter, mandate remaining, HCS, CRE, World ID, ATS, posture
 - GET /v1/assets/config — official ATS v8 factory/resolver
 - POST /v1/assets/intents — requires accepted + Mirror-verified settlement
 - GET /v1/liquidation — official Sepolia ChallengeLending status
@@ -29,7 +37,7 @@ Verifiable decision infrastructure for agents. Paid HTTP 402. Fixed query types.
 - POST /v1/world/rp-context — RP signature
 - POST /v1/world/verify — World ID 4.0 Cloud verify → hop token
 
-MCP: hop_meta, hop_mandate, hop_pay, hop_query, hop_evidence, hop_peac, hop_verify, hop_world_rp_context, hop_world_verify (`npm start -w @hop/mcp`).
+MCP: hop_meta, hop_mandate, hop_pay, hop_query, hop_evidence, hop_peac, hop_verify, hop_passport_issue, hop_passport_get, hop_passport_bind, hop_passport_revoke, hop_world_rp_context, hop_world_verify (`npm start -w @hop/mcp`).
 
 ## Settlement
 

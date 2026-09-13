@@ -1,3 +1,5 @@
+import type { Erc8004Ref } from "./did.js";
+import { parseDid, parseErc8004 } from "./did.js";
 import { keyedHashJson } from "./hash.js";
 import { QUERY_TYPES, type QueryType } from "./types.js";
 import type { ReasonCode } from "./decision.js";
@@ -13,6 +15,8 @@ export type PassportPayload = {
   issued_at: string;
   expires_at: string;
   policy_root: string;
+  did?: string;
+  erc8004?: Erc8004Ref;
 };
 
 export type PassportRecord = PassportPayload & {
@@ -51,10 +55,25 @@ function macEq(left: string, right: string): boolean {
   return mix === 0;
 }
 
+export function passportMacBody(payload: PassportPayload): PassportPayload {
+  const body: PassportPayload = {
+    id: payload.id,
+    agent_id: payload.agent_id,
+    capabilities: payload.capabilities,
+    issued_at: payload.issued_at,
+    expires_at: payload.expires_at,
+    policy_root: payload.policy_root,
+  };
+  if (payload.did) body.did = payload.did;
+  if (payload.erc8004) body.erc8004 = payload.erc8004;
+  return body;
+}
+
 export function signPassport(secret: string, payload: PassportPayload): string {
   if (!secret) throw new Error("passport_secret_required");
-  const mac = keyedHashJson(secret, payload);
-  return `${PASSPORT_TOKEN_PREFIX}.${b64urlEncode(JSON.stringify(payload))}.${mac}`;
+  const body = passportMacBody(payload);
+  const mac = keyedHashJson(secret, body);
+  return `${PASSPORT_TOKEN_PREFIX}.${b64urlEncode(JSON.stringify(body))}.${mac}`;
 }
 
 export function parsePassportToken(
@@ -79,14 +98,20 @@ export function parsePassportToken(
         .map(String)
         .filter((item): item is QueryType => (QUERY_TYPES as readonly string[]).includes(item))
     : [];
-  const payload: PassportPayload = {
+  const did = parseDid(typeof row.did === "string" ? row.did : undefined);
+  if (did && "error" in did) return { error: "passport_invalid" };
+  const erc8004 = parseErc8004(row.erc8004);
+  if (erc8004 && "error" in erc8004) return { error: "passport_invalid" };
+  const payload = passportMacBody({
     id: String(row.id ?? "").trim(),
     agent_id: String(row.agent_id ?? "").trim(),
     capabilities,
     issued_at: String(row.issued_at ?? "").trim(),
     expires_at: String(row.expires_at ?? "").trim(),
     policy_root: String(row.policy_root ?? "").trim(),
-  };
+    did: did?.did,
+    erc8004: erc8004?.erc8004,
+  });
   if (!payload.id || !payload.agent_id || capabilities.length < 1) return { error: "passport_invalid" };
   if (!payload.issued_at || !payload.expires_at) return { error: "passport_invalid" };
   const expected = keyedHashJson(secret, payload);

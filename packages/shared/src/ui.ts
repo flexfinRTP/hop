@@ -7,3 +7,10 @@ export {
 } from "./types.js";
 export { FLOW, HELP, STATUS_HELP, STATUS_LABEL } from "./help.js";
 export { wallFromAggregate } from "./wall.js";
+export {
+  VERDICTS,
+  reasonCodeFromQueryStatus,
+  verdictFromQueryStatus,
+  type ReasonCode,
+  type Verdict,
+} from "./decision.js";

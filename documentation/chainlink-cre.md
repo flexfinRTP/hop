@@ -2,6 +2,8 @@
 
 Hop’s join runs as a CRE Confidential Workflow. TypeScript `handlerInTee` executes on AWS Nitro (`us-west-2`). Secrets and Graph HTTP occur inside the enclave. `usingTheDons().report()` publishes a commitment, not the policy table or raw Graph payloads.
 
+Enterprise: policy caps stay sealed. That is why the limit is not in a prompt. Agent: 503 before settle if CRE is down — do not act on a ghost. Why: [`language.md`](language.md).
+
 Official: [CRE](https://docs.chain.link/cre), [Confidential Workflows](https://docs.chain.link/cre/concepts/confidential-workflows), [TypeScript guide](https://docs.chain.link/cre/guides/workflow/using-confidential-workflows/making-workflow-confidential-ts), [HTTP capability](https://docs.chain.link/cre/capabilities/http), [Hello Confidential Workflows](https://docs.chain.link/cre-templates/hello-confidential-workflows).
 
 Hop is not the [AI audit firewall](https://docs.chain.link/cre-templates/ai-audit-firewall) template and not the [automated liquidation protection](https://docs.chain.link/cre-templates/automated-liquidation-protection) template. Those are separate products.

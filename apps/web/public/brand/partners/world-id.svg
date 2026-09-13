@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="World ID">
+  <title>World ID</title>
+  <g fill="none" stroke="#111111" stroke-width="13" stroke-linecap="round">
+    <circle cx="60" cy="60" r="47"/>
+    <path d="M70.2 34.4a27 27 0 1 0 0 51.2"/>
+    <path d="M46 60h28"/>
+  </g>
+</svg>

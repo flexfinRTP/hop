@@ -1,3 +1,4 @@
+import type { Erc8004Ref } from "./did.js";
 import type { QueryStatus } from "./types.js";
 
 export const VERDICTS = ["ALLOW", "HOLD", "DENY", "REVIEW"] as const;
@@ -25,6 +26,10 @@ export const REASON_CODES = [
   "passport_capability",
   "passport_mandate",
   "passport_agent",
+  "did_invalid",
+  "erc8004_invalid",
+  "did_mismatch",
+  "erc8004_mismatch",
   "payer_denied",
   "world_required",
   "cre_unavailable",
@@ -42,10 +47,17 @@ export type Screening = {
 };
 
 export type IdentityReceipt = {
-  passport_id: string;
-  agent_id: string;
-  policy_root: string;
+  passport_id?: string;
+  agent_id?: string;
+  policy_root?: string;
+  did?: string;
+  erc8004?: Erc8004Ref;
 };
+
+export function compactIdentity(row: IdentityReceipt): IdentityReceipt | undefined {
+  if (!row.passport_id && !row.agent_id && !row.did && !row.erc8004) return undefined;
+  return row;
+}
 
 export type GateBody = {
   error: string;

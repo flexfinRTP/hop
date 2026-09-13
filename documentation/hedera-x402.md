@@ -1,6 +1,8 @@
 # Hedera x402
 
-Hop is an x402 resource server. Settlement is Hedera `exact` through [Blocky402](https://blocky402.com/). Clients must use the Hedera scheme, not a generic EVM/USDC `fetchWithPayment` helper and not The Graph’s Base USDC x402 Gateway.
+Hop is an x402 resource server. Settlement is Hedera `exact` through [Blocky402](https://blocky402.com/). Clients must use the Hedera scheme, not a generic EVM/USDC `fetchWithPayment` helper and not The Graph’s Base USDC x402 Gateway. Public `POST /v1/query` is x402, not OAuth (`GET /.well-known/oauth-protected-resource`, `oauth_on_query: false`). No API key. No login wall.
+
+Agent workflow: unpaid POST returns 402; retry with `X-PAYMENT` + `Idempotency-Key`. That is why Hop fits an agent loop — not a portal. Enterprise: public HashScan is the spend record. Why: [`language.md`](language.md).
 
 Official background: [Hedera and the x402 payment standard](https://hedera.com/blog/hedera-and-the-x402-payment-standard/), [x402 protocol](https://github.com/x402-foundation/x402), [`@x402/hedera`](https://github.com/x402-foundation/x402).
 
@@ -164,9 +166,12 @@ Checks: expiry, merchant `payTo`, query allowlist, freshness, per-call tinybars,
 
 ```http
 GET /.well-known/agent-card.json
+GET /.well-known/did.json
+GET /.well-known/oauth-protected-resource
+GET /.well-known/agent-registration.json
 ```
 
-A2A Agent Card describing Hop’s paid skill, input/output modes, and x402 requirement. MCP tools remain the execution interface; the card is discovery metadata.
+A2A Agent Card (`securitySchemes.x402`) describing Hop’s paid skill. RFC 9728 advertises that query is **not** OAuth. Optional `X-Hop-Did` / `X-Hop-Erc8004` stamp the receipt; they are not required to pay. MCP tools remain the execution interface; the card is discovery metadata.
 
 ## Settlement proof
 

@@ -3,6 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import {
   hashJson,
+  redactTrace,
   type Evidence,
   type MandateSpend,
   type PaymentRequirements,
@@ -324,20 +325,13 @@ export function paymentHashOf(payload: unknown): string {
 }
 
 export function emit(traceId: string | undefined, rail: TraceEvent["rail"], msg: string): TraceEvent {
-  const ev: TraceEvent = { t: new Date().toISOString(), rail, msg: redact(msg) };
+  const ev: TraceEvent = { t: new Date().toISOString(), rail, msg: redactTrace(msg) };
   if (!traceId) return ev;
   const list = traces.get(traceId) ?? [];
   list.push(ev);
   traces.set(traceId, list);
   for (const fn of listeners.get(traceId) ?? []) fn(ev);
   return ev;
-}
-
-function redact(msg: string): string {
-  return msg
-    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [redacted]")
-    .replace(/0x[0-9a-fA-F]{64}/g, "0x[redacted]")
-    .replace(/\b302[a-eA-E][0-9a-fA-F]{60,}\b/g, "[redacted-key]");
 }
 
 export function getTrace(traceId: string): TraceEvent[] {

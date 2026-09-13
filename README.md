@@ -8,13 +8,19 @@ The join runs in a Chainlink Runtime Environment confidential workflow: live Mes
 
 Hop does not parse natural language, execute caller GraphQL, or hold the payer’s keys. Hop does not provide private payments.
 
+**Enterprise:** put it in because an agent that can move value without a receipt is an uninsured process. Audit gets a link, not a screenshot of a chat. One hop in front of the irreversible tool call.
+
+**Agent workflow:** the tool call before the tool call that cannot be undone. One 402-retry. Verdict + receipt. Not on every token — on spend, bind, or actuate. Full why: [`documentation/language.md`](documentation/language.md).
+
 ## Documentation
 
 | Document | Contents |
 | --- | --- |
+| [`documentation/language.md`](documentation/language.md) | Protocol language — commercial source of truth |
 | `/docs` | Human docs hub: point your agent, Swagger, articles |
 | `/swagger.html` | Hosted Swagger UI for `openapi.yaml` |
 | [`documentation/README.md`](documentation/README.md) | Index, trust boundary, identifiers |
+| [`documentation/judge.md`](documentation/judge.md) | Judge pack: scoreable tape + standards |
 | [`documentation/operator.md`](documentation/operator.md) | Manual activation and demo tape |
 | [`documentation/architecture.md`](documentation/architecture.md) | Query types, charge table, join modes |
 | [`documentation/hedera-x402.md`](documentation/hedera-x402.md) | Blocky402 `exact`, meter, client/server |
@@ -22,8 +28,11 @@ Hop does not parse natural language, execute caller GraphQL, or hold the payer�
 | [`documentation/chainlink-cre.md`](documentation/chainlink-cre.md) | `handlerInTee`, secrets, simulate vs DON |
 | [`documentation/hedera-ats.md`](documentation/hedera-ats.md) | ATS v8 factory/resolver, bond lifecycle |
 | [`documentation/chainlink-liquidation.md`](documentation/chainlink-liquidation.md) | Official Sepolia challenge workflow |
-| [`documentation/agents.md`](documentation/agents.md) | MCP, skill, mandate, Agent Card |
+| [`documentation/agents.md`](documentation/agents.md) | MCP, skill, mandate, passport, Agent Card |
+| [`documentation/identity.md`](documentation/identity.md) | Hop passports, DID, ERC-8004, HITL |
+| [`documentation/demo-script.md`](documentation/demo-script.md) | 3-minute live tape |
 | [`documentation/evidence.md`](documentation/evidence.md) | Receipts, HCS, PEAC, verify |
+| `/pitch.html` | Pitch deck |
 | [`openapi/openapi.yaml`](openapi/openapi.yaml) | HTTP contract |
 | [`skills/hop-query/SKILL.md`](skills/hop-query/SKILL.md) | Agent retry procedure |
 | [`AI.md`](AI.md) | AI-assisted implementation attribution |
@@ -80,11 +89,17 @@ Do not start API or web from an unattended agent session unless asked.
 ```http
 POST /v1/query
 GET  /v1/meta
+GET  /v1/mandate
+GET  /v1/identity/passports
 GET  /v1/evidence?limit=50
 GET  /v1/evidence/{id}
 GET  /v1/evidence/{id}/peac
 GET  /v1/evidence/{id}/verify
+GET  /verify/{id}
 GET  /.well-known/agent-card.json
+GET  /.well-known/did.json
+GET  /.well-known/oauth-protected-resource
+GET  /.well-known/agent-registration.json
 ```
 
 Unpaid query:
@@ -118,9 +133,9 @@ CLI simulation is not a hardware TEE. Workflow WASM is not confidential. `usingT
 
 ## Agents
 
-Point an agent at [`llms.txt`](llms.txt), [`openapi/openapi.yaml`](openapi/openapi.yaml), or [`skills/hop-query/SKILL.md`](skills/hop-query/SKILL.md). It pays Hedera exact x402 and calls `POST /v1/query` in seconds. No SDK. No API key.
+Point an agent at [`llms.txt`](llms.txt), [`openapi/openapi.yaml`](openapi/openapi.yaml), or [`skills/hop-query/SKILL.md`](skills/hop-query/SKILL.md). It pays Hedera exact x402 and calls `POST /v1/query` in seconds. No SDK. No API key. No login. Optional `X-Hop-Did` stamps the receipt.
 
-Human hub: `/docs`. Hosted Swagger: `/swagger.html`. MCP tools: `hop_meta`, `hop_mandate`, `hop_query`, `hop_evidence`, `hop_peac`, `hop_verify`, `hop_world_rp_context`, `hop_world_verify`. Discovery: `GET /.well-known/agent-card.json`.
+Human hub: `/docs`. Judge pack: `/docs/judge`. Hosted Swagger: `/swagger.html`. MCP tools: `hop_meta`, `hop_mandate`, `hop_query`, `hop_evidence`, `hop_peac`, `hop_verify`, `hop_passport_issue`, `hop_passport_get`, `hop_passport_bind`, `hop_passport_revoke`, `hop_world_rp_context`, `hop_world_verify`. Discovery: `GET /.well-known/agent-card.json`, `GET /.well-known/did.json`.
 
 Mandates are deterministic budgets. The model does not pay.
 

@@ -2,6 +2,8 @@
 
 Every settled hop writes a public evidence pack. Packs contain hashes, Graph provenance, settlement references, and optional HCS sequence numbers. They do not contain policy caps, account ids, or Graph API keys.
 
+Enterprise audit gets this pack as a link (`/verify/{id}`), not a screenshot of a chat. The receipt names what was not verified. Why: [`language.md`](language.md).
+
 ## HTTP
 
 | Method | Path | Result |
@@ -46,11 +48,19 @@ Every settled hop writes a public evidence pack. Packs contain hashes, Graph pro
   "hcs_seq": 12,
   "chain": { "prev": "sha256", "hash": "sha256" },
   "peac_hash": "sha256",
-  "status": "accept"
+  "status": "accept",
+  "verdict": "ALLOW",
+  "reason_code": "policy_clear",
+  "screening": { "ofac": "not_screened", "kyc": "not_performed", "world": "off" },
+  "identity": {
+    "passport_id": "optional",
+    "did": "did:web:… optional",
+    "erc8004": { "agent_id": "optional", "agent_registry": "optional" }
+  }
 }
 ```
 
-`GET /v1/evidence/{id}/verify` recomputes aggregate hash, chain link, predecessor, PEAC hash, and CRE commitment shape. It also checks Hedera Mirror Node for settlement (payer, payee, amount, SUCCESS) and, when `hcs_seq` is present, the HCS topic/sequence/payload. Results cache ~60s; pass `?refresh=1` to re-query Mirror Node.
+`GET /v1/evidence/{id}/verify` recomputes aggregate hash, chain link, predecessor, PEAC hash, and CRE commitment shape. It also checks Hedera Mirror Node for settlement (payer, payee, amount, SUCCESS) and, when `hcs_seq` is present, the HCS topic/sequence/payload. Results cache ~60s; pass `?refresh=1` to re-query Mirror Node. Public HTML: `GET /verify/{id}` (`receipt.verify_path`).
 
 `ok` today means: local hashes match **and** public settlement (and HCS, if anchored) check out **and** CRE fields are structurally valid. `cre_ok` is **not** DON-authoritative proof by itself. `cre.mode` stays `"simulation"` until a DON execution is retrieved and the commitment hash matches. `external_settlement_verified` / `external_hcs_verified` are live Mirror Node checks as of 0.0.62.
 
@@ -74,7 +84,7 @@ Every settled hop writes a public evidence pack. Packs contain hashes, Graph pro
 
 `cre_don_verified` is true only when `cre.mode` is `don` after a commitment match. `/app` shows HASHES / SETTLEMENT / HCS / CRE SIM / DON. DON is green only when that tier is true.
 
-`POST /v1/query` 200 includes `receipt` (`hop.decision.v1`) built from the same evidence pack. Verify also returns that receipt. `receipt.verification` is omitted on the hot query path; agents call `/verify`.
+`POST /v1/query` 200 includes `receipt` (`hop.decision.v1`) built from the same evidence pack. Verify also returns that receipt. `receipt.verification` is omitted on the hot query path; agents call `/verify` or open `/verify/{id}`. Receipt fields: `decision.verdict` (`ALLOW`/`HOLD`/`DENY`/`REVIEW`), `reason_code`, `screening`, `payment.rail=hedera_x402_exact`, `verify_path`, optional `identity.did` / `identity.erc8004` / `identity.passport_id`. DID is syntax-checked only. Public query is x402, not OAuth.
 
 ## HCS
 

@@ -38,5 +38,8 @@ mandate.get("/", (c) => {
     inspect: decision.result,
     reason: decision.reason,
     hash: decision.mandate_hash,
+    assurance: bound.assurance ?? null,
+    verdict: decision.result === "ALLOW" ? "ALLOW" : decision.result === "REVIEW" ? "REVIEW" : "DENY",
+    reason_code: decision.reason,
   });
 });

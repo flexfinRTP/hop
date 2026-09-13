@@ -2,6 +2,7 @@ import { Component, StrictMode, type ErrorInfo, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { Root } from "./Root";
 import "./styles.css";
+import "./launch.css";
 import "./docs.css";
 
 class Gate extends Component<{ children: ReactNode }, { err: string }> {

@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+<title>Hop — Pitch Deck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Geist:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --paper:#f3eee4;
+  --moss:#245c4a;
+  --ink:#1a1915;
+  --muted:#6b665c;
+  --rule:#d4cec2;
+  --nav-h:clamp(48px,6.4vh,58px);
+  --serif:"Newsreader",Georgia,serif;
+  --sans:Geist,"IBM Plex Sans",system-ui,sans-serif;
+  --mono:"Geist Mono","IBM Plex Mono",ui-monospace,monospace;
+}
+html{scroll-behavior:smooth;scroll-snap-type:y mandatory;scroll-padding-top:0;overscroll-behavior-y:contain;overflow-x:hidden}
+body{font-family:var(--sans);color:var(--ink);line-height:1.15;-webkit-font-smoothing:antialiased;overflow-x:hidden;background:var(--paper)}
+.mono{font-family:var(--mono)}
+img{display:block;max-width:100%}
+button{font:inherit}
+
+.deck-nav{
+  position:fixed;top:0;left:0;right:0;z-index:1000;height:var(--nav-h);
+  padding:0 clamp(16px,3vw,36px);
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  background:color-mix(in srgb, var(--paper) 92%, transparent);
+  backdrop-filter:blur(18px) saturate(1.1);
+  border-bottom:1px solid var(--rule);color:var(--ink)
+}
+.nav-brand{display:flex;align-items:center;text-decoration:none;flex-shrink:0}
+.nav-brand img{height:22px;width:auto}
+.nav-center{display:flex;flex:1;min-width:0;align-items:center;justify-content:center;gap:16px}
+.nav-dots{display:flex;gap:6px;align-items:center}
+.nav-slide-title{margin:0;font-family:var(--mono);font-size:.62rem;letter-spacing:.2em;text-transform:uppercase;color:var(--moss);max-width:min(180px,26vw);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nav-dot{width:7px;height:7px;border:0;border-radius:50%;background:var(--rule);cursor:pointer}
+.nav-dot.active{background:var(--moss);width:18px;border-radius:99px}
+.nav-actions{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.nav-index{font-family:var(--mono);font-size:.62rem;letter-spacing:.16em;color:var(--muted)}
+.nav-print{font-family:var(--mono);font-size:.62rem;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--paper);background:var(--moss);border:0;padding:8px 12px;cursor:pointer}
+.deck-progress{position:absolute;left:0;bottom:0;height:2px;width:0;background:var(--moss);transition:width .35s}
+
+.slide{height:100vh;height:100dvh;scroll-snap-align:start;scroll-snap-stop:always;display:flex;position:relative;overflow:hidden;padding:var(--nav-h) 0 0}
+.inner{width:100%;max-height:100%;margin:0 auto;position:relative;z-index:2}
+.reveal{opacity:0;transform:translateY(18px);transition:opacity .55s cubic-bezier(.16,1,.3,1),transform .55s cubic-bezier(.16,1,.3,1)}
+.reveal.visible{opacity:1;transform:none}
+.d1{transition-delay:.08s}.d2{transition-delay:.16s}.d3{transition-delay:.24s}.d4{transition-delay:.32s}.d5{transition-delay:.4s}
+.k{font-family:var(--mono);font-size:.64rem;letter-spacing:.22em;text-transform:uppercase;color:var(--moss)}
+.shot img,.bleed img{width:100%;height:100%;object-fit:cover}
+
+/* 0 COVER — full-bleed gate, billboard type */
+.s0{padding:0;color:var(--paper)}
+.s0-bleed{position:absolute;inset:0}
+.s0-bleed img{width:100%;height:100%;object-fit:cover;object-position:62% 40%;filter:saturate(.85) contrast(1.08)}
+.s0-veil{position:absolute;inset:0;background:
+  linear-gradient(90deg, color-mix(in srgb, var(--moss) 88%, #000) 0%, color-mix(in srgb, var(--moss) 42%, transparent) 52%, transparent 78%),
+  linear-gradient(180deg, color-mix(in srgb, var(--ink) 35%, transparent) 0%, transparent 28%, color-mix(in srgb, var(--ink) 55%, transparent) 100%)}
+.s0 .inner{display:flex;flex-direction:column;justify-content:flex-end;min-height:100%;padding:clamp(28px,6vh,72px) clamp(22px,5vw,72px) 0;z-index:2}
+.s0 .live{display:inline-flex;align-items:center;gap:.5rem;font-family:var(--mono);font-size:.68rem;letter-spacing:.2em;text-transform:uppercase;color:var(--paper)}
+.s0 .live i{width:.42rem;height:.42rem;background:var(--paper);border-radius:50%;animation:pulse 1.6s ease-in-out infinite}
+.s0 h1{font-family:var(--serif);font-size:clamp(3.2rem,11vw,9.2rem);font-weight:500;line-height:.86;letter-spacing:-.045em;margin:.4rem 0 .8rem}
+.s0 h1 b{display:block;font-weight:500}
+.s0 h1 b:nth-child(2){font-style:italic}
+.s0 .hero{font-size:clamp(1.05rem,2.1vw,1.55rem);max-width:22ch;font-weight:500;letter-spacing:-.02em}
+.s0 .meta{font-family:var(--mono);font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:color-mix(in srgb, var(--paper) 72%, transparent);margin-top:.7rem;max-width:36rem}
+.s0-foot{display:grid;grid-template-columns:repeat(4,1fr);margin-top:clamp(1.4rem,4vh,2.6rem);border-top:1px solid color-mix(in srgb, var(--paper) 22%, transparent);font-family:var(--mono);font-size:.62rem;letter-spacing:.14em;text-transform:uppercase}
+.s0-foot span{padding:.85rem 0;border-right:1px solid color-mix(in srgb, var(--paper) 16%, transparent);color:color-mix(in srgb, var(--paper) 78%, transparent)}
+.s0-foot span:last-child{border-right:0}
+
+/* 1 STAKES — overlapping magazine photos */
+.s1{background:var(--paper);display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.18fr);padding:var(--nav-h) 0 0}
+.s1-copy{padding:clamp(22px,4.5vh,56px) clamp(22px,4vw,56px);display:flex;flex-direction:column;justify-content:center}
+.s1-copy h2{font-family:var(--serif);font-size:clamp(2.1rem,4.6vw,4.1rem);font-weight:500;letter-spacing:-.04em;line-height:.95;max-width:11ch;margin:.55rem 0 1.4rem}
+.s1-copy .lede{font-size:1.05rem;color:var(--muted);max-width:22rem;font-weight:500}
+.stack{position:relative;min-height:0}
+.card{position:absolute;overflow:hidden;box-shadow:0 18px 50px color-mix(in srgb, var(--ink) 18%, transparent)}
+.card img{width:100%;height:100%;object-fit:cover;filter:saturate(.7) contrast(1.05)}
+.card figcaption{position:absolute;left:0;right:0;bottom:0;padding:14px 16px;background:linear-gradient(transparent, color-mix(in srgb, var(--ink) 78%, transparent));color:var(--paper)}
+.card figcaption b{display:block;font-family:var(--serif);font-size:clamp(1.4rem,2.4vw,2rem);font-weight:600;letter-spacing:-.03em}
+.card figcaption p{margin-top:.25rem;font-size:.82rem;font-weight:500;opacity:.88;max-width:28ch}
+.c1{inset:8% 38% 48% 6%;z-index:2}
+.c2{inset:28% 6% 22% 32%;z-index:1;clip-path:polygon(8% 0,100% 0,100% 100%,0 100%)}
+.c3{inset:58% 18% 6% 8%;z-index:3}
+
+/* 2 THE HOP — three staggered stills */
+.s2{background:var(--moss);color:var(--paper);flex-direction:column}
+.s2 .inner{display:flex;flex-direction:column;min-height:100%;padding:clamp(16px,3vh,32px) clamp(18px,4vw,48px) clamp(18px,3vh,28px)}
+.s2 .k{color:color-mix(in srgb, var(--paper) 70%, transparent)}
+.s2 h2{font-family:var(--serif);font-size:clamp(1.7rem,3.8vw,3.1rem);font-weight:500;letter-spacing:-.035em;margin:.3rem 0 1rem}
+.s2-grid{flex:1;display:grid;grid-template-columns:1.05fr .9fr 1.05fr;gap:12px;min-height:0;align-items:stretch}
+.hop-col{display:flex;flex-direction:column;min-height:0;background:color-mix(in srgb, var(--paper) 8%, transparent);border:1px solid color-mix(in srgb, var(--paper) 14%, transparent)}
+.hop-col:nth-child(2){margin-top:clamp(12px,4vh,42px);margin-bottom:clamp(0px,2vh,18px)}
+.hop-col .ph{flex:1;min-height:0;overflow:hidden}
+.hop-col .ph img{width:100%;height:100%;object-fit:cover;filter:saturate(.75) contrast(1.04)}
+.hop-col .body{padding:16px 18px 18px}
+.hop-col .n{font-family:var(--mono);font-size:.64rem;letter-spacing:.2em;opacity:.7}
+.hop-col h3{font-family:var(--serif);font-size:clamp(2rem,4vw,3.2rem);font-weight:500;letter-spacing:-.04em;line-height:.9;margin:.2rem 0 .7rem}
+.hop-col ul{list-style:none;display:grid;gap:.4rem;font-size:.88rem;font-weight:500;opacity:.88}
+
+/* 3 HEDERA — moss field, rotated stamp */
+.s3{background:var(--moss);color:var(--paper)}
+.s3 .inner{display:grid;grid-template-columns:1fr 1.05fr;width:100%;min-height:100%;padding:clamp(24px,5vh,64px) clamp(22px,5vw,72px);gap:clamp(20px,4vw,56px);align-items:center}
+.s3 .k{color:color-mix(in srgb, var(--paper) 62%, transparent)}
+.s3 h2{font-family:var(--serif);font-size:clamp(2.4rem,6vw,5.4rem);font-weight:500;letter-spacing:-.045em;line-height:.9;margin:.35rem 0 1.1rem;max-width:8ch}
+.s3 .lede{font-size:clamp(1.02rem,1.8vw,1.28rem);max-width:28rem;font-weight:500;opacity:.88}
+.stamp-wrap{position:relative;height:100%;min-height:280px}
+.stamp{position:absolute;inset:8% 6% 10% 8%;overflow:hidden;transform:rotate(4.5deg);box-shadow:0 28px 70px color-mix(in srgb, #000 35%, transparent);border:10px solid var(--paper)}
+.stamp img{width:100%;height:100%;object-fit:cover}
+.stamp:after{content:"";position:absolute;inset:12px;border:1px dashed color-mix(in srgb, var(--moss) 45%, transparent);pointer-events:none}
+
+/* 4 x402 — cream editorial, photo clip */
+.s4{background:var(--paper)}
+.s4 .inner{display:grid;grid-template-columns:.95fr 1.15fr;width:100%;min-height:100%}
+.s4-copy{padding:clamp(28px,6vh,72px) clamp(22px,4vw,56px);display:flex;flex-direction:column;justify-content:space-between}
+.s4-copy h2{font-family:var(--serif);font-size:clamp(2.1rem,4.6vw,4rem);font-weight:500;letter-spacing:-.04em;line-height:.94;margin:.5rem 0 1.1rem;max-width:11ch}
+.s4-copy p{font-size:1.08rem;font-weight:500;color:var(--muted);max-width:22rem}
+.s4-copy .rail{font-family:var(--mono);font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;color:var(--moss)}
+.s4-shot{position:relative;overflow:hidden;clip-path:polygon(12% 0,100% 0,100% 100%,0 100%)}
+.s4-shot img{width:100%;height:100%;object-fit:cover;filter:saturate(.72) contrast(1.06)}
+.s4-shot .cap{position:absolute;left:18%;bottom:8%;max-width:16rem;background:var(--moss);color:var(--paper);padding:14px 16px;font-family:var(--mono);font-size:.64rem;letter-spacing:.14em;text-transform:uppercase}
+
+/* 5 WORKFLOW — full-bleed industrial + overlapping cream plate */
+.s5{padding:0;color:var(--paper)}
+.s5-bg{position:absolute;inset:0}
+.s5-bg img{width:100%;height:100%;object-fit:cover;filter:grayscale(.25) saturate(.55) contrast(1.08)}
+.s5-veil{position:absolute;inset:0;background:linear-gradient(115deg, color-mix(in srgb, var(--ink) 72%, var(--moss)) 0 42%, color-mix(in srgb, var(--ink) 28%, transparent) 78%)}
+.s5 .inner{display:grid;grid-template-columns:1.1fr .9fr;min-height:100%;align-items:center;padding:clamp(28px,6vh,72px) clamp(22px,4.5vw,64px);gap:clamp(16px,3vw,40px);z-index:2}
+.s5 .k{color:color-mix(in srgb, var(--paper) 70%, transparent)}
+.s5 h2{font-family:var(--serif);font-size:clamp(2rem,4.4vw,3.8rem);font-weight:500;letter-spacing:-.04em;line-height:.94;margin:.4rem 0 1rem;max-width:14ch}
+.s5 p{font-size:1.08rem;font-weight:500;max-width:24rem;opacity:.9}
+.s5 .inset{height:min(58vh,520px);overflow:hidden;border:8px solid var(--paper);box-shadow:0 24px 60px color-mix(in srgb, #000 40%, transparent)}
+.s5 .inset img{width:100%;height:100%;object-fit:cover;object-position:center 30%}
+
+/* 6 CHAINLINK — museum vault */
+.s6{background:var(--paper)}
+.s6 .inner{display:grid;grid-template-columns:1fr 1fr;width:100%;min-height:100%}
+.s6-copy{padding:clamp(28px,6vh,72px) clamp(22px,4vw,56px);display:flex;flex-direction:column;justify-content:center}
+.s6-copy h2{font-family:var(--serif);font-size:clamp(2.2rem,5vw,4.4rem);font-weight:500;letter-spacing:-.045em;line-height:.9;margin:.4rem 0 1.1rem;max-width:10ch}
+.s6-copy p{font-size:1.08rem;max-width:28rem;color:var(--muted);font-weight:500}
+.vault{background:var(--moss);display:grid;place-items:center;padding:clamp(24px,5vh,56px)}
+.vault-ring{width:min(86%,440px);aspect-ratio:1;border-radius:50%;overflow:hidden;border:12px solid var(--paper);box-shadow:0 0 0 1px color-mix(in srgb, var(--paper) 25%, transparent), 0 30px 70px color-mix(in srgb, #000 35%, transparent)}
+.vault-ring img{width:100%;height:100%;object-fit:cover}
+
+/* 7 GRAPH — warehouse mosaic */
+.s7{background:var(--ink);color:var(--paper);flex-direction:column}
+.s7 .inner{display:flex;flex-direction:column;min-height:100%;padding:clamp(16px,3vh,28px) clamp(16px,3vw,40px) clamp(16px,2.4vh,24px)}
+.s7 .k{color:color-mix(in srgb, var(--paper) 55%, transparent)}
+.s7 h2{font-family:var(--serif);font-size:clamp(1.7rem,3.6vw,3rem);font-weight:500;letter-spacing:-.035em;max-width:20ch;margin:.3rem 0 1rem}
+.mosaic{flex:1;display:grid;grid-template-columns:1.4fr .8fr .8fr;grid-template-rows:1fr 1fr;gap:8px;min-height:0}
+.tile{position:relative;overflow:hidden;min-height:0}
+.tile img{width:100%;height:100%;object-fit:cover;filter:saturate(.65) contrast(1.05)}
+.tile.lead{grid-row:1 / span 2}
+.tile figcaption{position:absolute;inset:auto 0 0 0;padding:14px 16px;background:linear-gradient(transparent, color-mix(in srgb, var(--moss) 92%, #000));}
+.tile figcaption small{font-family:var(--mono);font-size:.58rem;letter-spacing:.16em;text-transform:uppercase;opacity:.75}
+.tile figcaption h3{font-family:var(--serif);font-size:1.2rem;font-weight:500;margin:.15rem 0 .2rem}
+.tile figcaption p{font-size:.82rem;font-weight:500;opacity:.88}
+
+/* 8 MARKET — Stripe number wall */
+.s8{background:var(--paper);flex-direction:column}
+.s8-sky{height:28%;min-height:7.5rem;overflow:hidden;position:relative}
+.s8-sky img{width:100%;height:100%;object-fit:cover;object-position:center 62%;filter:saturate(.6) contrast(1.08)}
+.s8-sky:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg, transparent 40%, var(--paper))}
+.s8 .inner{flex:1;display:flex;flex-direction:column;padding:0 clamp(18px,4vw,56px) clamp(18px,3vh,32px);min-height:0}
+.s8 .k{margin-top:-.4rem}
+.s8 h2{font-family:var(--serif);font-size:clamp(1.6rem,3.4vw,2.7rem);font-weight:500;letter-spacing:-.035em;margin:.25rem 0 1rem}
+.nums{flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:1px;background:var(--rule);min-height:0;border:1px solid var(--rule)}
+.num{background:var(--paper);padding:clamp(14px,2.4vh,22px) clamp(14px,2vw,22px);display:flex;flex-direction:column;justify-content:flex-end}
+.num:last-child{background:var(--moss);color:var(--paper)}
+.num b{font-family:var(--serif);font-size:clamp(2.6rem,8vw,6.4rem);font-weight:500;letter-spacing:-.06em;line-height:.85;color:var(--moss)}
+.num:last-child b{color:var(--paper)}
+.num strong{display:block;margin-top:.55rem;font-size:clamp(.92rem,1.5vw,1.15rem);font-weight:600;letter-spacing:-.02em;max-width:22ch}
+.num em{font-style:normal;font-family:var(--mono);font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:.35rem}
+.num:last-child em{color:color-mix(in srgb, var(--paper) 65%, transparent)}
+
+/* 9 BUYERS — photographic mosaic */
+.s9{background:var(--paper);flex-direction:column}
+.s9 .inner{display:flex;flex-direction:column;min-height:100%;padding:clamp(14px,2.6vh,24px) clamp(16px,3vw,40px) clamp(14px,2vh,22px)}
+.s9 h2{font-family:var(--serif);font-size:clamp(1.7rem,3.6vw,3rem);font-weight:500;letter-spacing:-.035em;margin:.25rem 0 .8rem;max-width:16ch}
+.buyers{flex:1;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:1fr 1fr;gap:8px;min-height:0}
+.buyer{position:relative;overflow:hidden;min-height:0;color:var(--paper)}
+.buyer img{width:100%;height:100%;object-fit:cover;filter:saturate(.55) contrast(1.08) brightness(.82)}
+.buyer .shade{position:absolute;inset:0;background:linear-gradient(180deg, transparent 20%, color-mix(in srgb, var(--ink) 78%, transparent))}
+.buyer .txt{position:absolute;left:14px;right:14px;bottom:14px}
+.buyer small{font-family:var(--mono);font-size:.58rem;letter-spacing:.16em;text-transform:uppercase;opacity:.8}
+.buyer strong{display:block;font-family:var(--serif);font-size:clamp(1.15rem,2vw,1.55rem);font-weight:500;margin:.15rem 0}
+.buyer span{display:block;font-size:.8rem;font-weight:500;opacity:.88}
+.buyer.hop{background:var(--moss)}
+.buyer.hop img{opacity:.35;filter:saturate(.4)}
+
+/* 10 LIVE — receipt still life */
+.s10{background:var(--paper)}
+.s10 .inner{display:grid;grid-template-columns:.92fr 1.08fr;width:100%;min-height:100%}
+.s10-shot{overflow:hidden;background:var(--ink)}
+.s10-shot img{width:100%;height:100%;object-fit:cover;object-position:center 40%;filter:saturate(.7) contrast(1.08)}
+.s10-copy{padding:clamp(22px,4vh,48px) clamp(20px,3.6vw,48px);display:flex;flex-direction:column}
+.s10-copy h2{font-family:var(--serif);font-size:clamp(1.8rem,3.8vw,3.2rem);font-weight:500;letter-spacing:-.04em;margin:.3rem 0 1.1rem;max-width:12ch}
+.ledger{flex:1;display:grid;grid-template-rows:repeat(4,1fr);border-top:1px solid var(--rule);min-height:0}
+.led{display:grid;grid-template-columns:6.5rem 1fr;gap:10px;align-content:center;padding:.2rem 0;border-bottom:1px solid var(--rule)}
+.led b{font-family:var(--mono);font-size:.64rem;letter-spacing:.16em;color:var(--moss)}
+.led strong{display:block;font-family:var(--serif);font-size:clamp(1.15rem,2vw,1.55rem);font-weight:500}
+.led span{display:block;color:var(--muted);font-weight:500;margin-top:.15rem;font-size:.9rem}
+
+/* 11 CLOSE — moss billboard */
+.s11{background:var(--moss);color:var(--paper);padding:0}
+.s11 .inner{display:grid;grid-template-columns:1.15fr .85fr;width:100%;min-height:100%;align-items:stretch}
+.s11-copy{padding:clamp(32px,7vh,80px) clamp(24px,5vw,72px);display:flex;flex-direction:column;justify-content:center}
+.s11 .k{color:color-mix(in srgb, var(--paper) 62%, transparent)}
+.s11 h2{font-family:var(--serif);font-size:clamp(2.4rem,6.2vw,5.6rem);font-weight:500;letter-spacing:-.05em;line-height:.9;max-width:12ch;margin:.4rem 0 1rem}
+.s11 h2 em{font-style:italic;display:block}
+.s11 p{font-size:clamp(1.02rem,1.8vw,1.28rem);font-weight:500;max-width:28rem;opacity:.9}
+.cta{display:flex;flex-wrap:wrap;gap:10px;margin-top:1.7rem}
+.cta a{text-decoration:none;font-family:var(--mono);font-weight:500;letter-spacing:.14em;font-size:.68rem;text-transform:uppercase;padding:14px 18px}
+.cta-dark{background:var(--paper);color:var(--moss)}
+.cta-line{border:1.5px solid color-mix(in srgb, var(--paper) 55%, transparent);color:var(--paper)}
+.s11-shot{position:relative;overflow:hidden}
+.s11-shot img{width:100%;height:100%;object-fit:cover;filter:saturate(.7) contrast(1.08)}
+.s11-shot:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg, var(--moss), transparent 40%)}
+
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+@media screen and (max-width:900px){
+  .s1,.s3 .inner,.s4 .inner,.s5 .inner,.s6 .inner,.s10 .inner,.s11 .inner{grid-template-columns:1fr}
+  .s2-grid,.mosaic,.buyers,.nums,.s0-foot{grid-template-columns:1fr}
+  .mosaic{grid-template-rows:auto}
+  .tile.lead{grid-row:auto;min-height:28vh}
+  .s5 .inset,.stamp-wrap,.s4-shot,.s10-shot,.s11-shot,.vault{min-height:32vh}
+  .s4-shot{clip-path:none}
+  .stack{min-height:52vh}
+  .c1,.c2,.c3{position:relative;inset:auto;clip-path:none;height:28vh;margin:8px}
+  .hop-col:nth-child(2){margin:0}
+  .s0-foot{position:relative}
+  .s11-shot:after{background:linear-gradient(0deg, var(--moss), transparent 45%)}
+}
+@media print{
+  @page{size:A4 landscape;margin:0}
+  html{scroll-snap-type:none!important;height:auto!important;overflow:visible!important}
+  body{height:auto!important;overflow:visible!important;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  .deck-nav,.deck-progress{display:none!important}
+  .slide{
+    display:flex!important;width:297mm!important;height:210mm!important;min-height:210mm!important;max-height:210mm!important;
+    margin:0!important;page-break-after:always;break-after:page;page-break-inside:avoid;overflow:hidden!important;
+    print-color-adjust:exact;-webkit-print-color-adjust:exact
+  }
+  .slide:last-of-type{page-break-after:auto;break-after:auto}
+  .reveal{opacity:1!important;transform:none!important}
+}
+</style>
+</head>
+<body>
+
+<nav class="deck-nav">
+  <a class="nav-brand" href="#slide-0" aria-label="HOP">
+    <img src="/brand/hop-wordmark-moss.svg" width="96" height="22" alt="HOP">
+  </a>
+  <div class="nav-center">
+    <div class="nav-dots">
+      <button class="nav-dot active" data-slide="0" title="Cover"></button>
+      <button class="nav-dot" data-slide="1" title="Stakes"></button>
+      <button class="nav-dot" data-slide="2" title="The hop"></button>
+      <button class="nav-dot" data-slide="3" title="Hedera"></button>
+      <button class="nav-dot" data-slide="4" title="Pay"></button>
+      <button class="nav-dot" data-slide="5" title="Workflow"></button>
+      <button class="nav-dot" data-slide="6" title="Compute"></button>
+      <button class="nav-dot" data-slide="7" title="Books"></button>
+      <button class="nav-dot" data-slide="8" title="Market"></button>
+      <button class="nav-dot" data-slide="9" title="Buyers"></button>
+      <button class="nav-dot" data-slide="10" title="Live"></button>
+      <button class="nav-dot" data-slide="11" title="Close"></button>
+    </div>
+    <p class="nav-slide-title" id="nav-slide-title">Cover</p>
+  </div>
+  <div class="nav-actions">
+    <span class="nav-index" id="nav-index">01 / 12</span>
+    <button type="button" class="nav-print" id="deck-print-pdf" title="Save as PDF: turn OFF Headers and footers in the print dialog.">Save PDF</button>
+  </div>
+  <div class="deck-progress" id="deck-progress"></div>
+</nav>
+
+<section class="slide s0" id="slide-0">
+  <div class="s0-bleed" aria-hidden="true"><img src="/brand/pitch/brand-00-gate.jpg" width="1600" height="900" alt="" decoding="async" fetchpriority="high"></div>
+  <div class="s0-veil" aria-hidden="true"></div>
+  <div class="inner">
+    <p class="live reveal"><i></i> ETHOnline 2026 · live testnet</p>
+    <h1 class="reveal d1"><b>Check</b><b>Decide</b><b>Prove</b></h1>
+    <p class="hero reveal d2">Private policy. Public settlement. Verifiable evidence.</p>
+    <p class="meta reveal d3">$15T of B2B will move through agents. The window is the gate.</p>
+    <p class="meta reveal d4">Don’t trust the agent. Trust the receipt.</p>
+    <div class="s0-foot" aria-hidden="true">
+      <span>Built on Hedera</span>
+      <span>Standardized for x402</span>
+      <span>Chainlink CRE</span>
+      <span>The Graph data warehouse</span>
+    </div>
+  </div>
+</section>
+
+<section class="slide s1" id="slide-1">
+  <div class="s1-copy">
+    <p class="k reveal">Stakes</p>
+    <h2 class="reveal d1">Agents can spend. The log is the model’s word.</h2>
+    <p class="lede reveal d2">The board will not accept “the model said so.”</p>
+  </div>
+  <div class="stack">
+    <figure class="card c1 reveal d2">
+      <img src="/brand/pitch/web-factory.jpg" alt="">
+      <figcaption>
+        <b>No gate</b>
+        <p>Software already moves money, freight, energy, coverage. Nothing stops the hop before it pays.</p>
+      </figcaption>
+    </figure>
+    <figure class="card c2 reveal d3">
+      <img src="/brand/pitch/brand-01-unguarded.jpg" alt="">
+      <figcaption>
+        <b>No meter</b>
+        <p>Budgets live in a prompt. Spend is theatre. 40% of agentic programs die on missing risk controls.</p>
+      </figcaption>
+    </figure>
+    <figure class="card c3 reveal d4">
+      <img src="/brand/pitch/web-paper.jpg" alt="">
+      <figcaption>
+        <b>No receipt</b>
+        <p>The board will not accept “the model said so.” An agent without a receipt is an uninsured process.</p>
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="slide s2" id="slide-2">
+  <div class="inner">
+    <p class="k reveal">The hop</p>
+    <h2 class="reveal d1">One paid request. One decision receipt.</h2>
+    <div class="s2-grid">
+      <article class="hop-col reveal d2">
+        <div class="ph"><img src="/brand/pitch/brand-02-three.jpg" alt=""></div>
+        <div class="body">
+          <p class="n">01</p>
+          <h3>Check</h3>
+          <ul>
+            <li>Before it spends, books, or ships</li>
+            <li>House limit stays private</li>
+            <li>Hedera bills the check, not the action</li>
+          </ul>
+        </div>
+      </article>
+      <article class="hop-col reveal d3">
+        <div class="ph"><img src="/brand/pitch/brand-05-lever.jpg" alt=""></div>
+        <div class="body">
+          <p class="n">02</p>
+          <h3>Decide</h3>
+          <ul>
+            <li>ALLOW · HOLD · DENY</li>
+            <li>If not allowed, the tool does not run</li>
+            <li>Stop before value moves</li>
+          </ul>
+        </div>
+      </article>
+      <article class="hop-col reveal d4">
+        <div class="ph"><img src="/brand/pitch/brand-10-receipt.jpg" alt=""></div>
+        <div class="body">
+          <p class="n">03</p>
+          <h3>Prove</h3>
+          <ul>
+            <li>A link audit can open</li>
+            <li>Names what was not verified</li>
+            <li>Don’t trust the agent</li>
+          </ul>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="slide s3" id="slide-3">
+  <div class="inner">
+    <div>
+      <p class="k reveal">Hedera</p>
+      <h2 class="reveal d1">Built on Hedera.</h2>
+      <p class="lede reveal d2">Agents pay on the same hop as the decision. Public settlement. Visible to anyone. This is how agent spend becomes an insured process.</p>
+    </div>
+    <div class="stamp-wrap reveal d3">
+      <div class="stamp"><img src="/brand/pitch/brand-03-ledger.jpg" alt=""></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide s4" id="slide-4">
+  <div class="inner">
+    <div class="s4-copy">
+      <div>
+        <p class="k reveal">Agent payments</p>
+        <h2 class="reveal d1">Agents pay like the internet.</h2>
+        <p class="reveal d2">No login wall. No API key. A standard Visa, Stripe, and Google already sat down to govern. The platforms that speak it first set the default.</p>
+      </div>
+      <p class="rail reveal d3">x402 · standardized for agents</p>
+    </div>
+    <div class="s4-shot reveal d2">
+      <img src="/brand/pitch/brand-04-exchange.jpg" alt="">
+      <p class="cap">The default is being written now</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide s5" id="slide-5">
+  <div class="s5-bg" aria-hidden="true"><img src="/brand/pitch/web-factory.jpg" alt=""></div>
+  <div class="s5-veil" aria-hidden="true"></div>
+  <div class="inner">
+    <div>
+      <p class="k reveal">Workflow</p>
+      <h2 class="reveal d1">The call before the call that cannot be undone.</h2>
+      <p class="reveal d2">You do not put Hop on every token. You put it on spend, bind, or actuate. Seconds to wire. A verdict. A receipt the next agent can carry.</p>
+    </div>
+    <div class="inset reveal d3">
+      <img src="/brand/pitch/brand-05-lever.jpg" alt="">
+    </div>
+  </div>
+</section>
+
+<section class="slide s6" id="slide-6">
+  <div class="inner">
+    <div class="s6-copy">
+      <p class="k reveal">Chainlink</p>
+      <h2 class="reveal d1">Policy stays sealed.</h2>
+      <p class="reveal d2">Confidential compute on Chainlink CRE. Live books in. Verdict out. Caps never print. That is how a board lets an agent into production.</p>
+    </div>
+    <div class="vault">
+      <div class="vault-ring reveal d3">
+        <img src="/brand/pitch/brand-06-vault.jpg" alt="">
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide s7" id="slide-7">
+  <div class="inner">
+    <p class="k reveal">The Graph</p>
+    <h2 class="reveal d1">Live books. Every sector. We start with The Graph.</h2>
+    <div class="mosaic">
+      <figure class="tile lead reveal d2">
+        <img src="/brand/pitch/brand-07-aisles.jpg" alt="">
+        <figcaption>
+          <small>The Graph</small>
+          <h3>Public books, live</h3>
+          <p>The largest data warehouses. One rail to join them.</p>
+        </figcaption>
+      </figure>
+      <figure class="tile reveal d3">
+        <img src="/brand/pitch/web-grid.jpg" alt="">
+        <figcaption>
+          <small>Industrial</small>
+          <h3>Plant · grid · energy</h3>
+          <p>Same hop. Swap the warehouse. Keep the receipt.</p>
+        </figcaption>
+      </figure>
+      <figure class="tile reveal d4">
+        <img src="/brand/pitch/web-port.jpg" alt="">
+        <figcaption>
+          <small>Commercial</small>
+          <h3>Freight · claims · buy</h3>
+          <p>Standardized data. Posted identifiers. Sealed limits.</p>
+        </figcaption>
+      </figure>
+      <figure class="tile reveal d5" style="grid-column:2 / span 2">
+        <img src="/brand/pitch/web-library.jpg" alt="">
+        <figcaption>
+          <small>Every sector</small>
+          <h3>Live books. Every sector.</h3>
+          <p>We start with The Graph.</p>
+        </figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section class="slide s8" id="slide-8">
+  <div class="s8-sky reveal" aria-hidden="true"><img src="/brand/pitch/brand-08-horizon.jpg" alt=""></div>
+  <div class="inner">
+    <p class="k reveal">Market</p>
+    <h2 class="reveal d1">The window is open. It will not stay open.</h2>
+    <div class="nums">
+      <div class="num reveal d2"><b>15%</b><strong>of work decisions autonomous by 2028</strong><em>from zero</em></div>
+      <div class="num reveal d3"><b>$15T</b><strong>of B2B through agents</strong><em>90% of buying</em></div>
+      <div class="num reveal d4"><b>40%+</b><strong>of agent programs killed</strong><em>missing risk controls</em></div>
+      <div class="num reveal d5"><b>NOW</b><strong>whoever owns the pre-action receipt sets the default</strong><em>payments switching costs</em></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide s9" id="slide-9">
+  <div class="inner">
+    <p class="k reveal">Buyers</p>
+    <h2 class="reveal d1">The person who owns the threshold.</h2>
+    <div class="buyers">
+      <article class="buyer reveal d1">
+        <img src="/brand/pitch/web-desk.jpg" alt="">
+        <div class="shade"></div>
+        <div class="txt"><small>Risk</small><strong>CRO</strong><span>Autonomous action with no evidence</span></div>
+      </article>
+      <article class="buyer reveal d2">
+        <img src="/brand/pitch/web-grid.jpg" alt="">
+        <div class="shade"></div>
+        <div class="txt"><small>Ops</small><strong>Plant · grid</strong><span>Setpoints, energy, quality, load</span></div>
+      </article>
+      <article class="buyer reveal d2">
+        <img src="/brand/pitch/brand-09-sectors.jpg" alt="">
+        <div class="shade"></div>
+        <div class="txt"><small>Security</small><strong>CISO</strong><span>Tool calls that move value</span></div>
+      </article>
+      <article class="buyer reveal d3">
+        <img src="/brand/pitch/web-library.jpg" alt="">
+        <div class="shade"></div>
+        <div class="txt"><small>Claims</small><strong>Insurance</strong><span>Bind and pay without an appetite gate</span></div>
+      </article>
+      <article class="buyer reveal d3">
+        <img src="/brand/pitch/web-port.jpg" alt="">
+        <div class="shade"></div>
+        <div class="txt"><small>Chain</small><strong>Freight · buy</strong><span>Agents inside “approved limits”</span></div>
+      </article>
+      <article class="buyer hop reveal d4">
+        <img src="/brand/pitch/brand-00-gate.jpg" alt="">
+        <div class="shade"></div>
+        <div class="txt"><small>Hop</small><strong>One hop in front</strong><span>You keep policy, keys, customer</span></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="slide s10" id="slide-10">
+  <div class="inner">
+    <div class="s10-shot reveal d2">
+      <img src="/brand/pitch/brand-10-receipt.jpg" alt="">
+    </div>
+    <div class="s10-copy">
+      <p class="k reveal">Live</p>
+      <h2 class="reveal d1">Not a pitch. A public receipt.</h2>
+      <div class="ledger">
+        <div class="led reveal d2"><b>PAY</b><div><strong>HEDERA</strong><span>Settlement anyone can open.</span></div></div>
+        <div class="led reveal d3"><b>DECIDE</b><div><strong>SEALED</strong><span>Policy never prints. Verdict does.</span></div></div>
+        <div class="led reveal d4"><b>VERIFY</b><div><strong>A LINK</strong><span>The receipt names what was not verified.</span></div></div>
+        <div class="led reveal d5"><b>NOW</b><div><strong>LIVE</strong><span>ETHOnline. Run a hop. Copy the receipt.</span></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide s11" id="slide-11">
+  <div class="inner">
+    <div class="s11-copy">
+      <p class="k reveal">Close</p>
+      <h2 class="reveal d1">Don’t trust the agent.<em>Trust the receipt.</em></h2>
+      <p class="reveal d2">An agent that can move value without a receipt is an uninsured process. You will not scale that.</p>
+      <div class="cta reveal d3">
+        <a class="cta-dark" href="/app">Run a hop</a>
+        <a class="cta-line" href="/">See Hop</a>
+      </div>
+    </div>
+    <div class="s11-shot reveal d2">
+      <img src="/brand/pitch/brand-11-stamp.jpg" alt="">
+    </div>
+  </div>
+</section>
+
+<script>
+(function(){
+  const slides = document.querySelectorAll('.slide');
+  const dots = document.querySelectorAll('.nav-dot');
+  const navSlideTitle = document.getElementById('nav-slide-title');
+  const navIndex = document.getElementById('nav-index');
+  const progress = document.getElementById('deck-progress');
+  const SLIDE_SECTION_TITLES = [
+    'Cover','Stakes','The hop','Hedera','Pay','Workflow','Compute','Books','Market','Buyers','Live','Close'
+  ];
+  const reveals = document.querySelectorAll('.reveal');
+
+  function setNav(idx) {
+    if (navSlideTitle) navSlideTitle.textContent = SLIDE_SECTION_TITLES[idx] || '';
+    if (navIndex) navIndex.textContent = String(idx + 1).padStart(2,'0') + ' / ' + String(slides.length).padStart(2,'0');
+    if (progress) progress.style.width = ((idx + 1) / slides.length * 100) + '%';
+  }
+
+  const revealObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) entry.target.classList.add('visible');
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+  reveals.forEach(el => revealObserver.observe(el));
+
+  const slideObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const idx = Array.from(slides).indexOf(entry.target);
+        dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+        setNav(idx);
+      }
+    });
+  }, { threshold: 0.5 });
+  slides.forEach(s => slideObserver.observe(s));
+  setNav(0);
+
+  dots.forEach(dot => {
+    dot.addEventListener('click', () => {
+      const idx = parseInt(dot.dataset.slide, 10);
+      slides[idx].scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+
+  document.getElementById('deck-print-pdf')?.addEventListener('click', () => window.print());
+
+  let currentSlide = 0;
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+      e.preventDefault();
+      currentSlide = Math.min(currentSlide + 1, slides.length - 1);
+      slides[currentSlide].scrollIntoView({ behavior: 'smooth' });
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'PageUp') {
+      e.preventDefault();
+      currentSlide = Math.max(currentSlide - 1, 0);
+      slides[currentSlide].scrollIntoView({ behavior: 'smooth' });
+    }
+  });
+
+  const scrollObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) currentSlide = Array.from(slides).indexOf(entry.target);
+    });
+  }, { threshold: 0.5 });
+  slides.forEach(s => scrollObserver.observe(s));
+
+  const WHEEL_COOLDOWN_MS = 520;
+  let wheelLocked = false;
+  function syncSlideIndexFromScroll() {
+    const h = window.innerHeight;
+    if (h <= 0) return;
+    currentSlide = Math.min(Math.max(0, Math.round(window.scrollY / h)), slides.length - 1);
+  }
+  document.addEventListener('wheel', (e) => {
+    if (e.ctrlKey) return;
+    syncSlideIndexFromScroll();
+    const dir = e.deltaY > 0 ? 1 : -1;
+    const next = Math.min(Math.max(currentSlide + dir, 0), slides.length - 1);
+    if (next === currentSlide) return;
+    e.preventDefault();
+    if (wheelLocked) return;
+    wheelLocked = true;
+    currentSlide = next;
+    slides[currentSlide].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    window.setTimeout(() => { wheelLocked = false; }, WHEEL_COOLDOWN_MS);
+  }, { passive: false });
+})();
+</script>
+</body>
+</html>

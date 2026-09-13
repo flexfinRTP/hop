@@ -11,6 +11,7 @@ import {
   type QueryType,
 } from "@hop/shared/ui";
 import { getEvidence, getMeta, getPeac, getVerify, openTrace, postQuery, signDemo, type Meta, type QueryBody } from "./api";
+import { HopWordmark } from "./HopWordmark";
 import { WorldIdButton } from "./WorldId";
 import { navigate } from "./nav";
 
@@ -1507,7 +1508,9 @@ export function Workbench({
     <div className={`screen ${pending ? "busy" : ""}`}>
       <div className="scanlines" aria-hidden="true" />
       <header>
-        <h1>HOP</h1>
+        <h1>
+          <HopWordmark tone="cream" />
+        </h1>
         <div className="badges">
           <span>{meta?.labels?.cre ?? LABELS.cre}</span>
           <span>{meta?.labels?.rails ?? LABELS.rails}</span>

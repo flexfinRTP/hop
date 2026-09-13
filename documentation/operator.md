@@ -1,6 +1,6 @@
 # Operator activation
 
-Code is complete through **0.0.67**. These steps are the only remaining work that requires your machine, wallet, or camera.
+Code is complete through **0.0.89**. Docs/marketing through **0.0.90**. Judges: [`judge.md`](judge.md). Why enterprise / why agent: [`language.md`](language.md). These steps are the only remaining work that requires your machine, wallet, or camera.
 
 Do them in order. Restart the API after env changes.
 
@@ -16,6 +16,7 @@ Do them in order. Restart the API after env changes.
 | Policy table | both books `gt 0.78` |
 | `HOP_POLICY_COMMITMENT_SALT` | set in root `.env` and `cre/.env` (local only) |
 | CRE CLI | on PATH as `cre`, or set `CRE_CLI` locally |
+| `HOP_PASSPORT_SECRET` | 32-byte hex if you will issue passports; empty = identity routes 503 |
 
 ## 1. CRE login (required for Hedera + Graph + Chainlink tape)
 
@@ -63,15 +64,18 @@ http://localhost:5173/app
 2. Run unpaid → 402.
 3. Pay (demo signer is on).
 4. Wait for 200.
-5. Click **VERIFY HASHES**. Expect HASHES / SETTLEMENT / CRE SIM. DON stays `—`.
-6. Open **HASHSCAN**. Save:
+5. Click **VERIFY HASHES**. Expect HASHES / SETTLEMENT / CRE SIM. HCS SKIP unless topic/seq present. DON stays `—`.
+6. Confirm AGENT BUDGET remaining dropped. Verdict `ALLOW` or `HOLD`. Screening `OFAC not_screened`.
+7. **VERIFY LINK** → `/verify/{id}`. Copy link. Open **HASHSCAN**. Save:
    - HashScan URL
    - evidence id
    - both `subgraphId` + `schemaVersion` + `methodologyVersion` + blocks
    - HCS topic/seq if present
    - `cre_commitment_hash`
+8. Optional: Infrastructure → ISSUE passport → paste `X-Hop-Passport` → hop again so receipt `identity` is set. Optional `X-Hop-Did` stamps `identity.did` without login.
+9. Optional: one REVIEW/DENY (human threshold or passport_bound mandate) so remaining + `consumer_prompt` show.
 
-That one receipt is the Hedera floor, Graph standardized + AI demo source, and Chainlink sim tape.
+That one receipt is the Hedera floor, Graph standardized + AI demo source, Chainlink sim tape, and identity/verify surface.
 
 ## 4. Graph AI path (same hop)
 
@@ -127,8 +131,8 @@ ETHGlobal upload: **2–4 min**, ≥720p, no TTS.
 | 0:50 | Pay → HashScan |
 | 1:20 | CRE terminal: Nitro `us-west-2` + “simulator is not a real TEE” |
 | 2:00 | Same GraphQL on Aave + Compound, schema 3.1.0, decision |
-| 2:40 | MCP/SKILL |
-| 3:10 | Evidence vault chips + HCS |
+| 2:40 | MCP/SKILL · `/docs/judge` |
+| 3:10 | Evidence vault chips + `/verify/{id}` + HCS |
 | 3:40 | `/assets` if you ran ATS |
 
 ## Do not

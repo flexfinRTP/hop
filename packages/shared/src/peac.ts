@@ -27,6 +27,10 @@ export type PeacReceipt = {
   hcs_seq?: number;
   world?: Evidence["world"];
   posture: HopPosture;
+  verdict?: Evidence["verdict"];
+  reason_code?: Evidence["reason_code"];
+  screening?: Evidence["screening"];
+  identity?: Evidence["identity"];
 };
 
 export function peacFromEvidence(evidence: Evidence): PeacReceipt {
@@ -58,6 +62,10 @@ export function peacFromEvidence(evidence: Evidence): PeacReceipt {
     hcs_seq: evidence.hcs_seq,
     world: evidence.world,
     posture: evidence.posture ?? { ...POSTURE, cre: evidence.cre.mode },
+    verdict: evidence.verdict,
+    reason_code: evidence.reason_code,
+    screening: evidence.screening,
+    identity: evidence.identity,
   };
 }
 
