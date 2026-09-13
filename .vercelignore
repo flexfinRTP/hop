@@ -1,0 +1,6 @@
+cre
+apps/mcp
+apps/harness
+**/.env
+**/.env.local
+cre/.env

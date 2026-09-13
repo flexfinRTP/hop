@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc --noEmit",
+    "build": "tsc --noEmit -p tsconfig.json",
     "start": "node dist/index.js"
   },
   "dependencies": {

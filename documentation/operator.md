@@ -164,6 +164,8 @@ Local: `npm run build` at the repo root typechecks `@hop/api` then builds `@hop/
 | Build | from `apps/api/vercel.json` (`npm run build -w @hop/api`) |
 | Node | 20.x |
 
+`.vercelignore` keeps `cre/`, `apps/mcp`, and `apps/harness` out of both Vercel uploads. hop-api typecheck is `apps/api/src` only.
+
 After both URLs exist, on **hop** → Settings → Rewrites:
 
 ```

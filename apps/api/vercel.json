@@ -3,5 +3,10 @@
   "framework": "hono",
   "fluid": true,
   "installCommand": "cd ../.. && npm install",
-  "buildCommand": "cd ../.. && npm run build -w @hop/api"
+  "buildCommand": "cd ../.. && npm run build -w @hop/api",
+  "functions": {
+    "src/index.ts": {
+      "excludeFiles": "{../../cre,../../apps/web,../../apps/mcp,../../apps/harness}/**"
+    }
+  }
 }
