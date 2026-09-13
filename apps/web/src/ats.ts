@@ -22,7 +22,7 @@ import {
   SupportedWallets,
   TransferAndLockRequest,
 } from "@hashgraph/asset-tokenization-sdk";
-import { ATS_TESTNET, type AssetIntent, type AssetTransaction, type AtsStage } from "@hop/shared";
+import { ATS_TESTNET, type AssetIntent, type AssetTransaction, type AtsStage } from "@hop/shared/ui";
 
 export type AtsRuntimeConfig = {
   configured: boolean;

@@ -1,4 +1,4 @@
-import type { AssetIntent, AssetTerms } from "@hop/shared";
+import type { AssetIntent, AssetTerms } from "@hop/shared/ui";
 
 export type QueryType =
   | "market_params"

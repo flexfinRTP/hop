@@ -142,13 +142,16 @@ export function loadConfig(): AppConfig {
       .map((s) => s.trim())
       .filter(Boolean),
     rateLimitPerMin: Number(process.env.QUERY_RATE_LIMIT_PER_MIN ?? 6),
-    hopJoin: req("HOP_JOIN") === "inline" ? "inline" : "cre",
+    hopJoin:
+      req("HOP_JOIN") === "inline" || (Boolean(process.env.VERCEL) && req("HOP_JOIN") !== "cre")
+        ? "inline"
+        : "cre",
     creCwd: req("CRE_CWD") || path.resolve(here, "../../../cre"),
     creCli: resolveCreCli(),
     creEthPrivateKey: req("CRE_ETH_PRIVATE_KEY"),
     creWorkflowId: req("CRE_WORKFLOW_ID"),
     creGatewayUrl: req("CRE_GATEWAY_URL"),
-    demoSign: req("HOP_DEMO_SIGN") === "1" && process.env.NODE_ENV !== "production",
+    demoSign: req("HOP_DEMO_SIGN") === "1",
     demoAccountId: req("HEDERA_DEMO_ACCOUNT_ID"),
     demoPrivateKey: req("HEDERA_DEMO_PRIVATE_KEY"),
     hcsTopic: req("HEDERA_HCS_TOPIC"),
@@ -157,7 +160,9 @@ export function loadConfig(): AppConfig {
     hederaOperatorKey: req("HEDERA_OPERATOR_KEY"),
     corsOrigin: req("HOP_CORS_ORIGIN") || "http://localhost:5173",
     wallBuffer: Number(process.env.WALL_BUFFER ?? 0.2),
-    evidenceDir: req("HOP_EVIDENCE_DIR") || path.resolve(here, "../../../data/evidence"),
+    evidenceDir:
+      req("HOP_EVIDENCE_DIR") ||
+      (process.env.VERCEL ? "/tmp/hop-evidence" : path.resolve(here, "../../../data/evidence")),
     evidenceTtlMs: Number(process.env.HOP_EVIDENCE_TTL_MS ?? 72 * 3600 * 1000),
     databaseUrl: req("DATABASE_URL"),
     databaseSsl: req("DATABASE_SSL") === "1",

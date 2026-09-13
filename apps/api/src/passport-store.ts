@@ -9,6 +9,7 @@ import {
   parsePassportToken,
   signPassport,
   type Mandate,
+  type PassportPayload,
   type PassportRecord,
   type QueryType,
   type ReasonCode,
@@ -141,7 +142,7 @@ export function resolvePassport(input: {
   token: string;
   query?: QueryType;
   now?: number;
-}): { record: PassportRecord; payload: PassportRecord } | { error: ReasonCode } {
+}): { record: PassportRecord; payload: PassportPayload } | { error: ReasonCode } {
   const parsed = parsePassportToken(input.secret, input.token);
   if ("error" in parsed) return parsed;
   const record = byId.get(parsed.id);

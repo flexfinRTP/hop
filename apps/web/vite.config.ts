@@ -91,10 +91,15 @@ function agentDocs(): Plugin {
     closeBundle() {
       const dist = resolve(dirname(fileURLToPath(import.meta.url)), "dist");
       mkdirSync(resolve(dist, "documentation"), { recursive: true });
+      const written = new Set<string>();
       for (const [url, doc] of Object.entries(AGENT_DOCS)) {
-        const dest = resolve(dist, url.replace(/^\//, "").replace(/\/$/, "/index.md"));
+        let rel = url.replace(/^\//, "").replace(/\/$/, "");
+        if (!rel || !/\.[A-Za-z0-9]+$/.test(rel)) rel = rel ? `${rel}/index.md` : "index.md";
+        const dest = resolve(dist, rel);
+        if (written.has(dest) || !existsSync(doc.file)) continue;
         mkdirSync(dirname(dest), { recursive: true });
-        if (existsSync(doc.file)) copyFileSync(doc.file, dest);
+        copyFileSync(doc.file, dest);
+        written.add(dest);
       }
     },
   };
@@ -105,6 +110,12 @@ export default defineConfig({
   appType: "spa",
   define: {
     "process.env": {},
+  },
+  resolve: {
+    alias: {
+      "@hop/shared/ui": resolve(repo, "packages/shared/src/ui.ts"),
+      "@hop/shared": resolve(repo, "packages/shared/src/index.ts"),
+    },
   },
   optimizeDeps: {
     exclude: ["@hop/shared", "@hop/shared/ui"],

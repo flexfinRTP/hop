@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { AssetIntent } from "@hop/shared";
-import { QUERY_TYPES, type QueryType } from "@hop/shared/ui";
+import { QUERY_TYPES, redactTrace, type AssetIntent, type QueryType } from "@hop/shared/ui";
 import {
   getAssetIntents,
   getEvidence,
@@ -28,7 +27,6 @@ import { HopWordmark } from "./HopWordmark";
 import { RunTheater } from "./RunTheater";
 import { WorldIdButton } from "./WorldId";
 import { navigate } from "./nav";
-import { redactTrace } from "@hop/shared";
 
 type View = "decision" | "evidence" | "infrastructure";
 type RunStatus =

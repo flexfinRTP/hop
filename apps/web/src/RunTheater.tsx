@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
-import { redactTrace } from "@hop/shared";
+import { redactTrace } from "@hop/shared/ui";
 import type { DecisionReceipt, EvidencePack } from "./api";
 import { HopWordmark } from "./HopWordmark";
 

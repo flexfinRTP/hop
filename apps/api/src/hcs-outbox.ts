@@ -61,11 +61,14 @@ export async function flushHcsOutbox(cfg: AppConfig): Promise<number> {
 }
 
 export function startHcsOutboxWorker(cfg: AppConfig): () => void {
+  void flushHcsOutbox(cfg);
+  if (process.env.VERCEL) {
+    return () => undefined;
+  }
   const intervalMs = Math.max(15_000, Number(process.env.HOP_HCS_OUTBOX_INTERVAL_MS ?? 60_000));
   const timer = setInterval(() => {
     void flushHcsOutbox(cfg);
   }, intervalMs);
   timer.unref();
-  void flushHcsOutbox(cfg);
   return () => clearInterval(timer);
 }

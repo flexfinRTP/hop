@@ -111,14 +111,12 @@ export async function checkGraphReadiness(
     }),
     ),
   ]);
-  const sources = rows
-    .filter((row): row is PromiseFulfilledResult<GraphReadiness["sources"][number]> =>
-      row.status === "fulfilled",
-    )
-    .map((row) => row.value);
-  const errors = rows
-    .filter((row): row is PromiseRejectedResult => row.status === "rejected")
-    .map((row) => row.reason instanceof Error ? row.reason.message : String(row.reason));
+  const sources: GraphReadiness["sources"] = [];
+  const errors: string[] = [];
+  for (const row of rows) {
+    if (row.status === "fulfilled") sources.push(row.value);
+    else errors.push(row.reason instanceof Error ? row.reason.message : String(row.reason));
+  }
   const result: GraphReadiness = {
     ok:
       typeof head === "number" &&

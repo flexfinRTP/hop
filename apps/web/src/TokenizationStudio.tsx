@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import type { AssetIntent, AssetTerms } from "@hop/shared";
+import type { AssetIntent, AssetTerms } from "@hop/shared/ui";
 import { executeAtsLifecycle, type AtsRuntimeConfig } from "./ats";
 import {
   createAssetIntent,

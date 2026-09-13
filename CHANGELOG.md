@@ -4,17 +4,37 @@ Versions increment by `0.0.x` per feature. No dates.
 
 ## Roadmap
 
-Docs and marketing complete through **0.0.102**. Code complete through **0.0.101**. Public product is **verifiable decision infrastructure for agents** (finance lending policy gate as the demo vertical). Public loop: **Check. Decide. Prove.** Hedera x402 is the meter on the check, not pay-then-think. Commercial language is locked in [`documentation/language.md`](documentation/language.md) (why enterprise, why agent workflow, TAM/SAM/SOM, GTM). Identity: Hop passports + optional DID/ERC-8004 on the receipt. Pay rail: Hedera exact x402 (not OAuth). Remaining work is operator tape ([`documentation/operator.md`](documentation/operator.md)): CRE login, `HOP_PASSPORT_SECRET`, restart API, one paid hop, copy `/verify/{id}`.
+Docs and marketing complete through **0.0.105**. Code complete through **0.0.105**. Public product is **verifiable decision infrastructure for agents** (finance lending policy gate as the demo vertical). Public loop: **Check. Decide. Prove.** Hedera x402 is the meter on the check, not pay-then-think. Commercial language is locked in [`documentation/language.md`](documentation/language.md) (why enterprise, why agent workflow, TAM/SAM/SOM, GTM). Identity: Hop passports + optional DID/ERC-8004 on the receipt. Pay rail: Hedera exact x402 (not OAuth). Remaining work is operator tape ([`documentation/operator.md`](documentation/operator.md)): CRE login, `HOP_PASSPORT_SECRET`, restart API, one paid hop, copy `/verify/{id}`.
 
 Operator activation still requires funded testnet accounts, live Graph/CRE credentials, one paid hop on tape, and (for extra tracks) an ATS wallet lifecycle plus Sepolia `join()`. See [`documentation/README.md`](documentation/README.md).
 
 Local test bootstrap is **0.0.19** (`npm run setup:local`). Still needs you: Hedera faucet + Graph Studio API key.
 
-## 0.0.102
+## 0.0.105
 
-### Changed
+### Fixed
 
-- Public `/` and `/docs` no longer surface the judge pack. Sidebar, file cards, and marketing CTAs dropped. `/docs/judge` redirects to `/docs`. `documentation/judge.md` is unchanged.
+- Hosted build: root `npm run build` typechecks API then builds the Vite UI. Each Vercel `vercel.json` now installs from the repo root (npm workspaces + `@hop/shared`) instead of the app folder. Web typecheck no longer uses `tsc -b`. Desk/ATS imports go through `@hop/shared/ui`. Vite no longer copies `/documentation` onto the `documentation/` folder.
+
+### Next
+
+- You: redeploy both Vercel projects (Root `apps/web` and `apps/api`, include files outside root). Confirm `npm run build` is green locally. Operator tape unchanged.
+
+## 0.0.104
+
+### Added
+
+- Vercel two-project host: Hono `export default` (no `serve()` on `VERCEL`), `apps/api/vercel.json`, `apps/web/vercel.json`. Evidence dir defaults to `/tmp` on Vercel. Join defaults to `inline` unless `HOP_JOIN=cre`. `HOP_DEMO_SIGN=1` is honored in production so the hosted desk can retry a 402.
+
+### Next
+
+- You: two Vercel projects from this repo. Web Root `apps/web` preset Vite. API Root `apps/api` preset Hono. Rewrite `/v1` `/health` `/.well-known` from web → API. Set `HOP_JOIN=inline`, `DATABASE_URL`, `HOP_CORS_ORIGIN`, `HOP_PUBLIC_BASE_URL`. See [`documentation/operator.md`](documentation/operator.md).
+
+## 0.0.103
+
+### Added
+
+- Cream site background: faint moss grid plus two node paths. A packet hops agent → Hop → tool (`offset-path`, 9s, staggered). CSS only. `prefers-reduced-motion` keeps the grid and stills the pulse.
 
 ### Next
 
@@ -22,9 +42,9 @@ Local test bootstrap is **0.0.19** (`npm run setup:local`). Still needs you: Hed
 
 ## 0.0.102
 
-### Added
+### Changed
 
-- Cream site background: faint moss grid plus two node paths. A packet hops agent → Hop → tool (`offset-path`, 9s, staggered). CSS only. `prefers-reduced-motion` keeps the grid and stills the pulse.
+- Public `/` and `/docs` no longer surface the judge pack. Sidebar, file cards, and marketing CTAs dropped. `/docs/judge` redirects to `/docs`. `documentation/judge.md` is unchanged.
 
 ### Next
 

@@ -135,6 +135,45 @@ ETHGlobal upload: **2–4 min**, ≥720p, no TTS.
 | 3:10 | Evidence vault chips + `/verify/{id}` + HCS |
 | 3:40 | `/assets` if you ran ATS |
 
+## Hosted demo (two Vercel projects, same git repo)
+
+Do not point one project at `apps/api` as a Vite app. Vercel monorepo = **two projects**, one import each.
+
+**Project hop (UI)**
+
+| Field | Value |
+| --- | --- |
+| Framework Preset | Vite |
+| Root Directory | `apps/web` |
+| Include files outside Root Directory | On |
+| Install | from `apps/web/vercel.json` (`cd ../.. && npm install`) |
+| Build | from `apps/web/vercel.json` (`npm run build -w @hop/web`) |
+| Output | `dist` |
+| Node | 20.x |
+
+Local: `npm run build` at the repo root typechecks `@hop/api` then builds `@hop/web`.
+
+**Project hop-api (API)**
+
+| Field | Value |
+| --- | --- |
+| Framework Preset | Hono (Other if Hono is missing) |
+| Root Directory | `apps/api` |
+| Include files outside Root Directory | On |
+| Install | from `apps/api/vercel.json` (`cd ../.. && npm install`) |
+| Build | from `apps/api/vercel.json` (`npm run build -w @hop/api`) |
+| Node | 20.x |
+
+After both URLs exist, on **hop** → Settings → Rewrites:
+
+```
+/v1/:path*              →  https://<hop-api>.vercel.app/v1/:path*
+/health                 →  https://<hop-api>.vercel.app/health
+/.well-known/:path*     →  https://<hop-api>.vercel.app/.well-known/:path*
+```
+
+On **hop-api** env: copy root `.env`, then set `HOP_JOIN=inline`, `HOP_DEMO_SIGN=1`, `HOP_CORS_ORIGIN=https://<hop>.vercel.app`, `HOP_PUBLIC_BASE_URL=https://<hop-api>.vercel.app`, `DATABASE_URL` (Neon/Supabase), `DATABASE_SSL=1`. CRE CLI does not run on Vercel.
+
 ## Do not
 
 - Do not set `cre.mode` to `don` from a trigger ACK.
